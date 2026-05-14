@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PACKR</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1419;--sf:#192130;--sf2:#1f2b3e;--sf3:#283649;
+  --bd:#2b3c52;--tx:#ccd8e6;--tx2:#6e87a3;--tx3:#3e5572;
+  --am:#f5a623;--am-bg:rgba(245,166,35,.1);--gn:#3fd68a;--rd:#f05252;
+}
+html,body,#root{height:100%;background:var(--bg)}
+body{font-family:'Outfit',sans-serif;color:var(--tx);font-size:14px;line-height:1.4;overflow:hidden}
+button{cursor:pointer;border:none;background:none;font-family:inherit;color:inherit;line-height:1}
+input,textarea{font-family:inherit;font-size:14px}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--sf3);border-radius:2px}
+.bb{font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px}
+@keyframes chk{0%{transform:scale(1.5)}100%{transform:scale(1)}}
+@keyframes slR{from{transform:translateX(380px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fdU{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fd{from{opacity:0}to{opacity:1}}
+@media print{
+  .np{display:none!important}
+  html,body{overflow:visible!important;height:auto!important;background:white!important}
+  #root{height:auto!important;overflow:visible!important}
+  .print-scroll{overflow:visible!important;height:auto!important}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ── STORAGE ─────────────────────────────────────────────────────── */
+const SKEY = 'packr-v4';
+const loadData = () => { try { const s=localStorage.getItem(SKEY); return s?JSON.parse(s):{trips:[]}; } catch { return {trips:[]}; } };
+const saveData = d => { try { localStorage.setItem(SKEY,JSON.stringify(d)); } catch {} };
+
+/* ── CONSTANTS ───────────────────────────────────────────────────── */
+const genId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
+const LOC_COLORS = ['#F59E0B','#10B981','#3B82F6','#A855F7','#EF4444','#06B6D4','#F97316','#EC4899'];
+
+const DEFAULT_LOCS = [
+  {id:'l1',name:'Wearing',color:'#F59E0B'},
+  {id:'l2',name:'Personal Item',color:'#10B981'},
+  {id:'l3',name:'Carry-on',color:'#3B82F6'},
+  {id:'l4',name:'Checked Bag',color:'#A855F7'},
+];
+
+const ITEM_TPLS = [
+  ['Underwear','Clothing'],['Socks – Casual','Clothing'],['Socks – Work','Clothing'],
+  ['Business Shirt','Clothing'],['Linen Shirt','Clothing'],['T-Shirt','Clothing'],
+  ['Jumper – Formal','Clothing'],['Jumper – Casual','Clothing'],
+  ['Suit Pant','Clothing'],['Suit Jacket','Clothing'],
+  ['Chino – Navy','Clothing'],['Chino – Tan','Clothing'],
+  ['Pant – Lightweight','Clothing'],['Shorts – Formal','Clothing'],['Shorts – Casual','Clothing'],
+  ['Bathers','Clothing'],['Jeans','Clothing'],['Belt','Clothing'],['Collar Stays','Clothing'],
+  ['Tie','Clothing'],['Cufflinks','Clothing'],['Jacket','Clothing'],['Rain Jacket','Clothing'],
+  ['Hat – Sun','Clothing'],['Scarf','Clothing'],['Gym Shorts','Clothing'],['Gym Shirt','Clothing'],
+  ['Casual Shoes','Footwear'],['Business Shoes','Footwear'],['Thongs','Footwear'],
+  ['Slippers','Footwear'],['Running Shoes','Footwear'],
+  ['Laptop – Work','Electronics'],['Laptop – Personal','Electronics'],
+  ['Laptop Charger – Work','Electronics'],['Laptop Charger – Personal','Electronics'],
+  ['Mouse','Electronics'],['Keyboard','Electronics'],['e-Book','Electronics'],
+  ['Powerbank','Electronics'],['Powerboard','Electronics'],
+  ['Headphones – Plane','Electronics'],['Headphones – Bluetooth','Electronics'],
+  ['USB Brick','Electronics'],['Power Adaptor','Electronics'],
+  ['Phone – Personal','Electronics'],['Phone – Work','Electronics'],
+  ['Phone Charger – Personal','Electronics'],['Phone Charger – Work','Electronics'],
+  ['Camera','Electronics'],['Camera Lens','Electronics'],
+  ['Camera Battery','Electronics'],['Camera SD Card','Electronics'],
+  ['Smart Watch','Electronics'],['Watch Charger','Electronics'],
+  ['Tablet','Electronics'],['Tablet Charger','Electronics'],
+  ['Glasses','Accessories'],['Sunglasses','Accessories'],['Water Bottle','Accessories'],
+  ['Fan','Accessories'],['Towel','Accessories'],['Travel Pillow','Accessories'],
+  ['Eye Mask','Accessories'],['Ear Plugs','Accessories'],['Umbrella','Accessories'],
+  ['Watch','Accessories'],['Luggage Lock','Accessories'],['Laundry Bag','Accessories'],
+  ['Packing Cubes','Accessories'],['Cable Organiser','Accessories'],
+  ['Passport Wallet','Documents & Finance'],['Travel SIM','Documents & Finance'],
+  ['Notepad','Documents & Finance'],['Pen','Documents & Finance'],
+  ['Wallet','Documents & Finance'],['Cash / Currency','Documents & Finance'],
+  ['Travel Insurance Docs','Documents & Finance'],['Boarding Pass','Documents & Finance'],
+  ['Toiletries','Toiletries & Health'],['Medication','Toiletries & Health'],
+  ['Sunscreen','Toiletries & Health'],['Insect Repellent','Toiletries & Health'],
+  ['Hand Sanitiser','Toiletries & Health'],['Vitamins','Toiletries & Health'],
+  ['Lip Balm','Toiletries & Health'],
+];
+
+const mkTrip = name => ({
+  id:genId(), name, createdAt:Date.now(),
+  locations: DEFAULT_LOCS.map(l=>({...l,id:genId()})),
+  items: ITEM_TPLS.map(([n,c])=>({id:genId(),name:n,category:c})),
+  assignments:[],
+});
+
+/* ── PRIMITIVES ──────────────────────────────────────────────────── */
+function Veil({onClick,alpha=.55}){
+  return <div onClick={onClick} style={{position:'fixed',inset:0,
+    background:`rgba(0,0,0,${alpha})`,zIndex:200,animation:'fd .15s ease'}}/>;
+}
+
+function Modal({title,onClose,children,w=380}){
+  return <>
+    <Veil onClick={onClose}/>
+    <div style={{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
+      width:w,maxWidth:'94vw',maxHeight:'84vh',overflowY:'auto',
+      background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:24,
+      zIndex:201,animation:'fdU .2s ease',boxShadow:'0 24px 64px rgba(0,0,0,.65)'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+        <div className="bb" style={{fontSize:22,color:'var(--am)'}}>{title}</div>
+        <button onClick={onClose} style={{color:'var(--tx2)',fontSize:20,padding:'2px 6px'}}>✕</button>
+      </div>
+      {children}
+    </div>
+  </>;
+}
+
+function NameInput({placeholder,defVal='',onSubmit}){
+  const [v,setV]=useState(defVal);
+  const r=useRef();
+  useEffect(()=>{r.current?.focus();r.current?.select();},[]);
+  const go=()=>v.trim()&&onSubmit(v.trim());
+  return <div style={{display:'flex',gap:8}}>
+    <input ref={r} value={v} onChange={e=>setV(e.target.value)}
+      onKeyDown={e=>e.key==='Enter'&&go()} placeholder={placeholder}
+      style={{flex:1,background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:7,
+        padding:'9px 12px',color:'var(--tx)',outline:'none'}}/>
+    <button onClick={go} disabled={!v.trim()} style={{background:'var(--am)',color:'#1a0e00',
+      borderRadius:7,padding:'9px 18px',fontWeight:700,fontSize:13,opacity:v.trim()?1:.4}}>Save</button>
+  </div>;
+}
+
+function Qty({value,onChange}){
+  return <div style={{display:'flex',alignItems:'center',gap:4,userSelect:'none',flexShrink:0}}>
+    <button onClick={()=>onChange(Math.max(0,value-1))}
+      style={{width:24,height:24,borderRadius:5,background:'var(--sf3)',
+        fontSize:17,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+    <span style={{width:22,textAlign:'center',fontSize:13,fontWeight:600}}>{value}</span>
+    <button onClick={()=>onChange(Math.min(20,value+1))}
+      style={{width:24,height:24,borderRadius:5,background:'var(--sf3)',
+        fontSize:17,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+  </div>;
+}
+
+function PackBox({packed,onChange}){
+  const [pop,setPop]=useState(false);
+  const handle=()=>{if(!packed){setPop(true);setTimeout(()=>setPop(false),300);}onChange();};
+  return <button onClick={handle} style={{width:26,height:26,borderRadius:6,flexShrink:0,
+    border:`2px solid ${packed?'var(--gn)':'var(--sf3)'}`,
+    background:packed?'var(--gn)':'transparent',color:'#fff',
+    fontSize:13,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',
+    transition:'all .15s',animation:pop?'chk .25s ease':'none'}}>
+    {packed?'✓':''}
+  </button>;
+}
+
+/* ── ITEM CARD (board) ───────────────────────────────────────────── */
+function ItemCard({item,a,locColor,onToggle,onQty,onOpen}){
+  return <div style={{background:a.packed?`${locColor}0c`:'var(--sf2)',
+    border:`1px solid ${a.packed?locColor+'38':'var(--bd)'}`,
+    borderRadius:8,padding:'9px 11px',display:'flex',alignItems:'center',gap:10,
+    transition:'all .2s',opacity:a.packed?.58:1}}>
+    <PackBox packed={a.packed} onChange={onToggle}/>
+    <span onClick={onOpen} style={{flex:1,fontSize:13,fontWeight:500,cursor:'pointer',
+      textDecoration:a.packed?'line-through':'none',color:'var(--tx)'}}>
+      {item.name}
+    </span>
+    <Qty value={a.quantity} onChange={onQty}/>
+  </div>;
+}
+
+/* ── LOCATION COLUMN ─────────────────────────────────────────────── */
+function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onDel}){
+  const [menu,setMenu]=useState(false);
+  const mRef=useRef();
+  useEffect(()=>{
+    if(!menu)return;
+    const fn=e=>{if(!mRef.current?.contains(e.target))setMenu(false);};
+    document.addEventListener('mousedown',fn);
+    return()=>document.removeEventListener('mousedown',fn);
+  },[menu]);
+
+  const la=assignments.filter(a=>a.locationId===loc.id);
+  const total=la.reduce((s,a)=>s+a.quantity,0);
+  const packed=la.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+  const pct=total>0?packed/total:0;
+  const done=total>0&&packed===total;
+  const sorted=[...la].sort((a,b)=>(a.packed?1:0)-(b.packed?1:0));
+
+  return <div style={{width:274,flexShrink:0,background:'var(--sf)',border:'1px solid var(--bd)',
+    borderTop:`3px solid ${loc.color}`,borderRadius:10,
+    display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
+    
+    <div style={{padding:'12px 12px 10px',flexShrink:0}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <div className="bb" style={{fontSize:18,color:loc.color,letterSpacing:2}}>{loc.name}</div>
+        <div style={{position:'relative'}} ref={mRef}>
+          <button onClick={()=>setMenu(m=>!m)}
+            style={{color:'var(--tx3)',fontSize:19,padding:'1px 5px',borderRadius:4,
+              background:menu?'var(--sf3)':'transparent'}}>⋯</button>
+          {menu&&<div style={{position:'absolute',right:0,top:'calc(100% + 4px)',
+            background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,
+            zIndex:20,width:154,boxShadow:'0 10px 28px rgba(0,0,0,.55)',overflow:'hidden'}}>
+            <button onClick={()=>{onRename();setMenu(false);}}
+              style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>Rename</button>
+            <button onClick={()=>{onDel();setMenu(false);}}
+              style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--rd)',textAlign:'left'}}>Delete</button>
+          </div>}
+        </div>
+      </div>
+      <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--tx3)',marginBottom:7}}>
+        <span>{la.length} item{la.length!==1?'s':''} · {total} total</span>
+        <span style={{color:done?'var(--gn)':'var(--tx3)'}}>{packed}/{total} packed</span>
+      </div>
+      <div style={{height:3,background:'var(--sf3)',borderRadius:2,overflow:'hidden'}}>
+        <div style={{height:'100%',borderRadius:2,transition:'width .35s ease',
+          width:`${pct*100}%`,background:done?'var(--gn)':loc.color}}/>
+      </div>
+    </div>
+
+    <div onClick={e=>e.target===e.currentTarget&&onAdd()}
+      style={{flex:1,overflowY:'auto',padding:'0 8px',display:'flex',flexDirection:'column',gap:6,cursor:'default'}}>
+      {sorted.length===0
+        ?<div onClick={onAdd} style={{textAlign:'center',color:'var(--tx3)',fontSize:12,
+            padding:'28px 0',cursor:'pointer'}}>
+            Tap to add items
+          </div>
+        :null
+      }
+      {sorted.map(a=>{
+        const item=items.find(i=>i.id===a.itemId);
+        return item?<ItemCard key={a.id} item={item} a={a} locColor={loc.color}
+          onToggle={()=>onToggle(a.itemId,loc.id)}
+          onQty={q=>onQty(a.itemId,loc.id,q)}
+          onOpen={()=>onOpen(a.itemId)}/>:null;
+      })}
+      <div style={{height:8}}/>
+    </div>
+
+    <div style={{padding:8,borderTop:'1px solid var(--bd)',flexShrink:0}}>
+      <button onClick={onAdd} style={{width:'100%',padding:'7px',borderRadius:7,
+        background:'var(--sf2)',border:'1px dashed var(--bd)',
+        color:'var(--tx3)',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+        <span style={{fontSize:16}}>+</span> Add item
+      </button>
+    </div>
+  </div>;
+}
+
+/* ── ITEM DRAWER ─────────────────────────────────────────────────── */
+function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,onDel}){
+  const [editVal,setEditVal]=useState(null);
+  const totalQty=assignments.reduce((s,a)=>s+a.quantity,0);
+  const packedQty=assignments.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+  const saveRename=()=>{if(editVal?.trim())onRename(editVal.trim());setEditVal(null);};
+
+  return <>
+    <Veil onClick={onClose} alpha={.38}/>
+    <div style={{position:'fixed',right:0,top:0,bottom:0,width:358,
+      background:'var(--sf)',borderLeft:'1px solid var(--bd)',
+      zIndex:201,display:'flex',flexDirection:'column',animation:'slR .25s ease'}}>
+
+      <div style={{padding:'18px 18px 14px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
+          <div style={{flex:1,marginRight:12}}>
+            <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,marginBottom:5}}>
+              {item.category}
+            </div>
+            {editVal!==null
+              ?<input value={editVal} onChange={e=>setEditVal(e.target.value)}
+                  onKeyDown={e=>{if(e.key==='Enter')saveRename();if(e.key==='Escape')setEditVal(null);}}
+                  autoFocus style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--am)',
+                    borderRadius:6,padding:'5px 9px',color:'var(--tx)',fontSize:16,fontWeight:600,outline:'none'}}/>
+              :<div style={{fontSize:17,fontWeight:700}}>{item.name}</div>
+            }
+          </div>
+          <button onClick={onClose} style={{color:'var(--tx2)',fontSize:19,flexShrink:0}}>✕</button>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          {[['Total',totalQty,'var(--am)'],['Packed',packedQty,'var(--gn)'],['To Pack',totalQty-packedQty,'var(--tx2)']].map(([l,v,c])=>(
+            <div key={l} style={{flex:1,background:'var(--sf2)',borderRadius:7,padding:'8px 10px',textAlign:'center'}}>
+              <div style={{fontSize:21,fontWeight:700,color:c}}>{v}</div>
+              <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{flex:1,overflowY:'auto',padding:16}}>
+        <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>
+          Location Assignments
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {locations.map(loc=>{
+            const a=assignments.find(x=>x.locationId===loc.id);
+            const qty=a?.quantity||0;
+            return <div key={loc.id} style={{borderRadius:8,padding:'11px 13px',
+              background:qty>0?'var(--sf2)':'transparent',
+              border:`1px solid ${qty>0?loc.color+'40':'var(--bd)'}`,
+              borderLeft:`3px solid ${qty>0?loc.color:'var(--bd)'}`,
+              display:'flex',alignItems:'center',gap:12,transition:'all .2s'}}>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:13,color:qty>0?'var(--tx)':'var(--tx3)'}}>{loc.name}</div>
+                {qty>0&&a&&<div style={{fontSize:11,marginTop:2,color:a.packed?'var(--gn)':'var(--tx3)'}}>
+                  {a.packed?'✓ Packed':'Not yet packed'}
+                </div>}
+              </div>
+              {qty>0&&a&&<PackBox packed={a.packed} onChange={()=>onToggle(loc.id)}/>}
+              <Qty value={qty} onChange={q=>onQty(loc.id,q)}/>
+            </div>;
+          })}
+        </div>
+      </div>
+
+      <div style={{padding:'12px 14px 14px',borderTop:'1px solid var(--bd)',flexShrink:0}}>
+        {editVal!==null
+          ?<div style={{display:'flex',gap:8}}>
+              <button onClick={()=>setEditVal(null)} style={{flex:1,padding:'9px',borderRadius:7,
+                background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:13}}>Cancel</button>
+              <button onClick={saveRename} style={{flex:1,padding:'9px',borderRadius:7,
+                background:'var(--am)',color:'#1a0e00',fontSize:13,fontWeight:700}}>Save Name</button>
+            </div>
+          :<>
+            <button onClick={onClose} style={{width:'100%',padding:'11px',borderRadius:8,
+              background:'var(--am)',color:'#1a0e00',fontSize:14,fontWeight:700,marginBottom:8}}>
+              Done
+            </button>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={()=>setEditVal(item.name)} style={{flex:1,padding:'7px',borderRadius:6,
+                background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:12,color:'var(--tx2)'}}>✎ Rename</button>
+              <button onClick={()=>{if(window.confirm(`Delete "${item.name}" from all locations?`))onDel();}}
+                style={{flex:1,padding:'7px',borderRadius:6,fontSize:12,fontWeight:500,
+                  background:'rgba(240,82,82,.08)',border:'1px solid rgba(240,82,82,.25)',color:'var(--rd)'}}>
+                ✗ Delete
+              </button>
+            </div>
+          </>
+        }
+      </div>
+    </div>
+  </>;
+}
+
+/* ── ITEM PICKER ─────────────────────────────────────────────────── */
+function Picker({items,assignments,locId,loc,onClose,onSelect,onCreateAdd}){
+  const [q,setQ]=useState('');
+  const [name,setName]=useState('');
+  const [tab,setTab]=useState('pick');
+  const qRef=useRef();
+  useEffect(()=>{qRef.current?.focus();},[]);
+
+  const taken=new Set(assignments.filter(a=>a.locationId===locId).map(a=>a.itemId));
+  const filtered=items.filter(i=>!taken.has(i.id)&&i.name.toLowerCase().includes(q.toLowerCase()));
+  const grouped=filtered.reduce((acc,i)=>{(acc[i.category]=acc[i.category]||[]).push(i);return acc;},{});
+
+  return <Modal title={`Add to ${loc.name}`} onClose={onClose} w={440}>
+    <div style={{display:'flex',gap:6,marginBottom:16}}>
+      {[['pick','Pick Item'],['new','New Item']].map(([v,l])=>(
+        <button key={v} onClick={()=>setTab(v)} style={{padding:'5px 16px',borderRadius:20,
+          fontSize:12,fontWeight:600,border:'none',
+          background:tab===v?'var(--am)':'var(--sf2)',color:tab===v?'#1a0e00':'var(--tx2)'}}>
+          {l}
+        </button>
+      ))}
+    </div>
+
+    {tab==='pick'&&<>
+      <input ref={qRef} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search items…"
+        style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+          borderRadius:7,padding:'8px 12px',color:'var(--tx)',outline:'none',marginBottom:12}}/>
+      <div style={{maxHeight:340,overflowY:'auto',margin:'0 -24px',padding:'0 24px'}}>
+        {Object.entries(grouped).length===0
+          ?<div style={{textAlign:'center',color:'var(--tx3)',padding:'24px 0',fontSize:13}}>
+            {q?'No matches':'All items already added here'}
+          </div>
+          :Object.entries(grouped).map(([cat,catItems])=>(
+            <div key={cat} style={{marginBottom:12}}>
+              <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',
+                letterSpacing:1,fontWeight:600,marginBottom:4}}>{cat}</div>
+              {catItems.map(item=>(
+                <button key={item.id} onClick={()=>onSelect(item.id)}
+                  style={{display:'flex',alignItems:'center',width:'100%',
+                    padding:'8px 10px',borderRadius:6,textAlign:'left',
+                    fontSize:13,color:'var(--tx)',marginBottom:2,background:'transparent',transition:'background .1s'}}
+                  onMouseEnter={e=>e.currentTarget.style.background='var(--sf2)'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <span style={{flex:1}}>{item.name}</span>
+                  <span style={{color:'var(--tx3)',fontSize:15}}>+</span>
+                </button>
+              ))}
+            </div>
+          ))
+        }
+      </div>
+    </>}
+
+    {tab==='new'&&<div>
+      <div style={{fontSize:12,color:'var(--tx2)',marginBottom:8}}>
+        Create a new item and add it to <b style={{color:'var(--tx)'}}>{loc.name}</b>:
+      </div>
+      <input value={name} onChange={e=>setName(e.target.value)} autoFocus
+        onKeyDown={e=>e.key==='Enter'&&name.trim()&&onCreateAdd(name.trim())}
+        placeholder="E.g. Silk Pyjamas…"
+        style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+          borderRadius:7,padding:'9px 12px',color:'var(--tx)',outline:'none',marginBottom:12}}/>
+      <button onClick={()=>name.trim()&&onCreateAdd(name.trim())} disabled={!name.trim()}
+        style={{width:'100%',padding:'10px',borderRadius:7,background:'var(--am)',
+          color:'#1a0e00',fontWeight:700,fontSize:13,opacity:name.trim()?1:.45}}>
+        Create & Add
+      </button>
+    </div>}
+  </Modal>;
+}
+
+/* ── SUMMARY SUB-VIEWS ───────────────────────────────────────────── */
+
+function StatusDot({packed}){
+  return packed
+    ?<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',
+        width:16,height:16,borderRadius:'50%',background:'var(--gn)',
+        color:'#0f1419',fontSize:10,fontWeight:700,flexShrink:0}}>✓</span>
+    :<span style={{display:'inline-block',width:16,height:16,borderRadius:'50%',
+        border:'1.5px solid var(--sf3)',flexShrink:0}}/>;
+}
+
+function ListView({groups}){
+  if(!groups.length) return <Empty/>;
+  return groups.map(({loc,rows})=>{
+    const lTotal=rows.reduce((s,a)=>s+a.quantity,0);
+    const lPacked=rows.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+    return <div key={loc.id} style={{background:'var(--sf)',border:'1px solid var(--bd)',
+      borderTop:`3px solid ${loc.color}`,borderRadius:10,marginBottom:16,overflow:'hidden'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+        padding:'11px 16px',borderBottom:'1px solid var(--bd)'}}>
+        <div className="bb" style={{fontSize:17,color:loc.color}}>{loc.name}</div>
+        <div style={{fontSize:12,color:'var(--tx2)'}}>{lPacked}/{lTotal} packed</div>
+      </div>
+      <table style={{width:'100%',borderCollapse:'collapse'}}>
+        <thead>
+          <tr style={{background:'var(--sf2)'}}>
+            <th style={{padding:'7px 16px',width:28}}></th>
+            <th style={{padding:'7px 16px',textAlign:'left',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600}}>Item</th>
+            <th style={{padding:'7px 16px',textAlign:'center',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600,width:60}}>Qty</th>
+            <th style={{padding:'7px 16px',textAlign:'center',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600,width:88}}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(a=>(
+            <tr key={a.id} style={{borderTop:'1px solid var(--bd)',background:a.packed?'rgba(63,214,138,.06)':'transparent'}}>
+              <td style={{padding:'8px 0 8px 16px',textAlign:'center'}}><StatusDot packed={a.packed}/></td>
+              <td style={{padding:'8px 16px',fontSize:13,color:'var(--tx)'}}>{a.item.name}</td>
+              <td style={{padding:'8px 16px',textAlign:'center',fontSize:13,fontWeight:700}}>{a.quantity}</td>
+              <td style={{padding:'8px 16px',textAlign:'center'}}>
+                <span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:4,
+                  textTransform:'uppercase',letterSpacing:.5,
+                  background:a.packed?'rgba(63,214,138,.15)':'rgba(240,82,82,.1)',
+                  color:a.packed?'var(--gn)':'var(--rd)'}}>
+                  {a.packed?'Packed':'To Pack'}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>;
+  });
+}
+
+function BoardSummary({groups}){
+  if(!groups.length) return <Empty/>;
+  return <div style={{display:'flex',gap:14,overflowX:'auto',paddingBottom:12,alignItems:'flex-start'}}>
+    {groups.map(({loc,rows})=>{
+      const lTotal=rows.reduce((s,a)=>s+a.quantity,0);
+      const lPacked=rows.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+      const pct=lTotal>0?(lPacked/lTotal)*100:0;
+      return <div key={loc.id} style={{minWidth:210,flex:1,background:'var(--sf)',
+        border:'1px solid var(--bd)',borderTop:`3px solid ${loc.color}`,
+        borderRadius:10,overflow:'hidden',flexShrink:0}}>
+        <div style={{padding:'11px 14px 10px',borderBottom:'1px solid var(--bd)'}}>
+          <div className="bb" style={{fontSize:16,color:loc.color,marginBottom:6}}>{loc.name}</div>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--tx3)',marginBottom:6}}>
+            <span>{rows.length} item{rows.length!==1?'s':''}</span>
+            <span style={{color:pct===100?'var(--gn)':'var(--tx3)'}}>{lPacked}/{lTotal}</span>
+          </div>
+          <div style={{height:3,background:'var(--sf3)',borderRadius:2,overflow:'hidden'}}>
+            <div style={{height:'100%',borderRadius:2,width:`${pct}%`,background:pct===100?'var(--gn)':loc.color}}/>
+          </div>
+        </div>
+        <div>
+          {rows.map(a=>(
+            <div key={a.id} style={{display:'flex',alignItems:'center',gap:9,
+              padding:'7px 14px',borderBottom:'1px solid var(--bd)',
+              background:a.packed?'rgba(63,214,138,.05)':'transparent'}}>
+              <StatusDot packed={a.packed}/>
+              <span style={{flex:1,fontSize:12,color:'var(--tx)'}}>{a.item.name}</span>
+              <span style={{fontSize:12,fontWeight:700,color:'var(--tx2)',flexShrink:0}}>×{a.quantity}</span>
+            </div>
+          ))}
+        </div>
+      </div>;
+    })}
+  </div>;
+}
+
+function GridSummary({trip}){
+  const locs=trip.locations;
+  const assignedItems=trip.items.filter(item=>trip.assignments.some(a=>a.itemId===item.id));
+  if(!assignedItems.length) return <Empty/>;
+
+  const byCategory=assignedItems.reduce((acc,item)=>{
+    (acc[item.category]=acc[item.category]||[]).push(item);return acc;
+  },{});
+
+  const locStats=locs.map(loc=>{
+    const la=trip.assignments.filter(a=>a.locationId===loc.id);
+    return{total:la.reduce((s,a)=>s+a.quantity,0),packed:la.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0)};
+  });
+
+  const cell=(itemId,loc)=>{
+    const a=trip.assignments.find(x=>x.itemId===itemId&&x.locationId===loc.id);
+    if(!a) return <td key={loc.id} style={{padding:'5px 8px',textAlign:'center',
+      border:'1px solid var(--bd)',color:'var(--tx3)',fontSize:11}}>–</td>;
+    return <td key={loc.id} style={{padding:'5px 8px',textAlign:'center',border:'1px solid var(--bd)',
+      background:a.packed?'rgba(63,214,138,.12)':loc.color+'18'}}>
+      <span style={{fontWeight:700,fontSize:12,color:a.packed?'var(--gn)':loc.color}}>
+        {a.quantity}{a.packed?' ✓':''}
+      </span>
+    </td>;
+  };
+
+  const thStyle={padding:'7px 10px',textAlign:'center',background:'var(--sf2)',
+    border:'1px solid var(--bd)',fontSize:11,fontWeight:700,whiteSpace:'nowrap'};
+
+  return <div style={{overflowX:'auto'}}>
+    <table style={{borderCollapse:'collapse',fontSize:12,width:'100%'}}>
+      <thead>
+        <tr>
+          <th style={{...thStyle,textAlign:'left',minWidth:160,position:'sticky',left:0,
+            fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600}}>
+            Item
+          </th>
+          {locs.map((loc,i)=>(
+            <th key={loc.id} style={{...thStyle,color:loc.color,minWidth:90}}>
+              {loc.name}
+              <div style={{fontSize:9,color:'var(--tx3)',fontWeight:400,marginTop:2}}>
+                {locStats[i].packed}/{locStats[i].total}
+              </div>
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {Object.entries(byCategory).map(([cat,catItems])=>(
+          <React.Fragment key={cat}>
+            <tr>
+              <td colSpan={locs.length+1} style={{padding:'4px 12px',background:'var(--sf3)',
+                fontSize:9,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,
+                fontWeight:700,border:'1px solid var(--bd)'}}>
+                {cat}
+              </td>
+            </tr>
+            {catItems.map(item=>(
+              <tr key={item.id}>
+                <td style={{padding:'5px 12px',border:'1px solid var(--bd)',fontSize:12,
+                  color:'var(--tx)',background:'var(--sf)',position:'sticky',left:0}}>
+                  {item.name}
+                </td>
+                {locs.map(loc=>cell(item.id,loc))}
+              </tr>
+            ))}
+          </React.Fragment>
+        ))}
+      </tbody>
+    </table>
+    <div style={{marginTop:10,fontSize:11,color:'var(--tx3)'}}>
+      Numbers show quantity · ✓ = packed · – = not assigned to this location
+    </div>
+  </div>;
+}
+
+function Empty(){
+  return <div style={{textAlign:'center',color:'var(--tx3)',padding:'48px 0',fontSize:14}}>
+    No items assigned yet. Head to Board view to start packing.
+  </div>;
+}
+
+/* ── SUMMARY ─────────────────────────────────────────────────────── */
+function Summary({trip}){
+  const [sumView,setSumView]=useState('list');
+  const totalItems=trip.assignments.reduce((s,a)=>s+a.quantity,0);
+  const packedItems=trip.assignments.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+  const pct=totalItems>0?(packedItems/totalItems)*100:0;
+
+  const groups=trip.locations.map(loc=>{
+    const rows=trip.assignments
+      .filter(a=>a.locationId===loc.id)
+      .map(a=>({...a,item:trip.items.find(i=>i.id===a.itemId)}))
+      .filter(a=>a.item)
+      .sort((a,b)=>(a.packed?1:0)-(b.packed?1:0));
+    return{loc,rows};
+  }).filter(g=>g.rows.length>0);
+
+  const viewOpts=[['list','List'],['board','Columns'],['grid','Grid']];
+
+  return <div className="print-scroll" style={{flex:1,overflowY:'auto',padding:'24px 28px'}}>
+    <div style={{maxWidth:sumView==='grid'?'100%':sumView==='board'?'100%':740,margin:'0 auto'}}>
+
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+        marginBottom:20,flexWrap:'wrap',gap:10}} className="np">
+        <div className="bb" style={{fontSize:28,color:'var(--am)'}}>Packing Summary</div>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          <div style={{display:'flex',background:'var(--sf2)',borderRadius:7,
+            border:'1px solid var(--bd)',padding:2}}>
+            {viewOpts.map(([v,l])=>(
+              <button key={v} onClick={()=>setSumView(v)} style={{padding:'4px 13px',borderRadius:5,
+                fontSize:12,fontWeight:600,
+                background:sumView===v?'var(--sf3)':'transparent',
+                color:sumView===v?'var(--tx)':'var(--tx2)'}}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <button onClick={()=>window.print()} style={{padding:'8px 16px',borderRadius:7,
+            background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:13}}>
+            🖨 Print / Save PDF
+          </button>
+        </div>
+      </div>
+
+      {/* Overview bar */}
+      <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,
+        padding:'14px 18px',marginBottom:20}}>
+        <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:700}}>{trip.name}</div>
+            <div style={{fontSize:12,color:'var(--tx2)',marginTop:2}}>
+              {packedItems}/{totalItems} packed · {trip.assignments.length} item types · {trip.locations.length} locations
+            </div>
+          </div>
+          <div style={{flex:1,minWidth:120}}>
+            <div style={{display:'flex',gap:6,alignItems:'center'}}>
+              <div style={{flex:1,height:6,background:'var(--sf3)',borderRadius:3,overflow:'hidden'}}>
+                <div style={{height:'100%',borderRadius:3,transition:'width .3s',
+                  width:`${pct}%`,background:pct===100?'var(--gn)':'var(--am)'}}/>
+              </div>
+              <span style={{fontSize:12,color:'var(--tx2)',flexShrink:0}}>{Math.round(pct)}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Grid hint */}
+      {sumView==='grid'&&<div style={{fontSize:12,color:'var(--tx3)',marginBottom:12}} className="np">
+        Tip: this is the most compact view for printing — use your browser's "Fit to page" option for best results.
+      </div>}
+
+      {sumView==='list'&&<ListView groups={groups}/>}
+      {sumView==='board'&&<BoardSummary groups={groups}/>}
+      {sumView==='grid'&&<GridSummary trip={trip}/>}
+    </div>
+  </div>;
+}
+
+/* ── BOARD ───────────────────────────────────────────────────────── */
+function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onDelLoc}){
+  return <div style={{flex:1,display:'flex',gap:16,padding:20,
+    overflowX:'auto',overflowY:'hidden',alignItems:'stretch'}}>
+    {trip.locations.map(loc=>(
+      <LocCol key={loc.id} loc={loc} items={trip.items} assignments={trip.assignments}
+        onAdd={()=>onAdd(loc.id)} onToggle={onToggle} onQty={onQty} onOpen={onOpen}
+        onRename={()=>onRenameLoc(loc.id)} onDel={()=>onDelLoc(loc.id)}/>
+    ))}
+    <button onClick={onAddLoc} style={{width:240,flexShrink:0,alignSelf:'flex-start',
+      border:'1px dashed var(--bd)',borderRadius:10,padding:20,color:'var(--tx3)',
+      fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:3}}>
+      <span style={{fontSize:20}}>+</span> Add Location
+    </button>
+  </div>;
+}
+
+/* ── TRIP HEADER ─────────────────────────────────────────────────── */
+function TripHeader({trip,onHome,onRename,onExport,onImport,view,onView}){
+  const [editing,setEditing]=useState(false);
+  const [val,setVal]=useState('');
+  const fRef=useRef();
+  const iRef=useRef();
+
+  const startEdit=()=>{setVal(trip.name);setEditing(true);};
+  const save=()=>{if(val.trim()&&val.trim()!==trip.name)onRename(val.trim());setEditing(false);};
+  useEffect(()=>{if(editing)iRef.current?.focus();},[editing]);
+
+  return <div className="np" style={{display:'flex',alignItems:'center',gap:12,
+    padding:'0 20px',height:54,background:'var(--sf)',
+    borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+    <button onClick={onHome} className="bb"
+      style={{fontSize:24,color:'var(--am)',letterSpacing:3,padding:0,transition:'opacity .15s'}}
+      onMouseEnter={e=>e.currentTarget.style.opacity='.65'}
+      onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+      PACKR
+    </button>
+    <span style={{color:'var(--bd)',fontSize:18,userSelect:'none'}}>/</span>
+
+    {editing
+      ?<input ref={iRef} value={val} onChange={e=>setVal(e.target.value)}
+          onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape')setEditing(false);}}
+          onBlur={save}
+          style={{fontSize:14,fontWeight:600,background:'var(--sf2)',border:'1px solid var(--am)',
+            borderRadius:6,padding:'3px 8px',color:'var(--tx)',outline:'none',
+            maxWidth:240,minWidth:80}}/>
+      :<button onClick={startEdit}
+          title="Click to rename"
+          style={{fontSize:14,fontWeight:600,color:'var(--tx2)',maxWidth:240,padding:'3px 7px',
+            borderRadius:5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+            transition:'background .12s',textAlign:'left'}}
+          onMouseEnter={e=>e.currentTarget.style.background='var(--sf2)'}
+          onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+          {trip.name} <span style={{fontSize:11,color:'var(--tx3)',marginLeft:2}}>✎</span>
+        </button>
+    }
+
+    <div style={{display:'flex',background:'var(--sf2)',borderRadius:7,
+      border:'1px solid var(--bd)',padding:2,marginLeft:4}}>
+      {[['board','Board'],['summary','Summary']].map(([v,l])=>(
+        <button key={v} onClick={()=>onView(v)} style={{padding:'4px 14px',borderRadius:5,
+          fontSize:12,fontWeight:600,
+          background:view===v?'var(--sf3)':'transparent',
+          color:view===v?'var(--tx)':'var(--tx2)'}}>
+          {l}
+        </button>
+      ))}
+    </div>
+
+    <div style={{flex:1}}/>
+    <button onClick={onExport} style={{padding:'5px 12px',borderRadius:6,fontSize:12,
+      background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)'}}>↓ Export</button>
+    <input ref={fRef} type="file" accept=".json" style={{display:'none'}}
+      onChange={e=>{
+        const f=e.target.files[0];if(!f)return;
+        const r=new FileReader();r.onload=ev=>{onImport(ev.target.result);e.target.value='';};r.readAsText(f);
+      }}/>
+    <button onClick={()=>fRef.current?.click()} style={{padding:'5px 12px',borderRadius:6,fontSize:12,
+      background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)'}}>↑ Import</button>
+  </div>;
+}
+
+/* ── HOME SCREEN ─────────────────────────────────────────────────── */
+function HomeScreen({trips,onCreate,onSelect,onDelete,onRename,onImport}){
+  const [name,setName]=useState('');
+  const [renamingId,setRenamingId]=useState(null);
+  const [renameVal,setRenameVal]=useState('');
+  const fRef=useRef();
+  const fmt=ts=>new Date(ts).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});
+
+  const saveRename=(id)=>{
+    if(renameVal.trim())onRename(id,renameVal.trim());
+    setRenamingId(null);
+  };
+
+  return <div style={{flex:1,overflowY:'auto',padding:'44px 28px'}}>
+    <div style={{maxWidth:680,margin:'0 auto'}}>
+
+      <div className="bb" style={{fontSize:76,color:'var(--am)',letterSpacing:6,lineHeight:1,marginBottom:8}}>
+        PACKR
+      </div>
+      <div style={{fontSize:14,color:'var(--tx2)',marginBottom:48,letterSpacing:.3}}>
+        Smart packing for smarter travellers
+      </div>
+
+      {/* New trip */}
+      <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,
+        padding:'20px 22px',marginBottom:32}}>
+        <div className="bb" style={{fontSize:17,color:'var(--am)',marginBottom:14}}>New Trip</div>
+        <div style={{display:'flex',gap:8}}>
+          <input value={name} onChange={e=>setName(e.target.value)}
+            onKeyDown={e=>{ if(e.key==='Enter'&&name.trim()){onCreate(name.trim());setName('');} }}
+            placeholder="E.g. Tokyo 2025, Bali Conference…"
+            style={{flex:1,background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:7,
+              padding:'10px 14px',color:'var(--tx)',outline:'none',fontSize:14}}/>
+          <button onClick={()=>{if(name.trim()){onCreate(name.trim());setName('');}}}
+            disabled={!name.trim()} style={{padding:'10px 22px',borderRadius:7,background:'var(--am)',
+              color:'#1a0e00',fontWeight:700,fontSize:14,opacity:name.trim()?1:.45}}>
+            Create
+          </button>
+        </div>
+      </div>
+
+      {/* Trip list */}
+      {trips.length>0&&<>
+        <div className="bb" style={{fontSize:17,color:'var(--tx2)',marginBottom:14}}>Your Trips</div>
+        <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:32}}>
+          {trips.slice().sort((a,b)=>b.createdAt-a.createdAt).map(t=>{
+            const tot=t.assignments.reduce((s,a)=>s+a.quantity,0);
+            const pk=t.assignments.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+            const pct=tot>0?(pk/tot)*100:0;
+            const isRenaming=renamingId===t.id;
+            return <div key={t.id}
+              style={{background:'var(--sf)',border:`1px solid ${isRenaming?'var(--am)':'var(--bd)'}`,borderRadius:10,
+                padding:'15px 18px',display:'flex',alignItems:'center',gap:14,
+                cursor:isRenaming?'default':'pointer',transition:'border-color .15s'}}
+              onClick={()=>!isRenaming&&onSelect(t.id)}
+              onMouseEnter={e=>{if(!isRenaming)e.currentTarget.style.borderColor='var(--am)';}}
+              onMouseLeave={e=>{if(!isRenaming)e.currentTarget.style.borderColor='var(--bd)';}}>
+              <div style={{flex:1,minWidth:0}}>
+                {isRenaming
+                  ?<div style={{display:'flex',gap:8,marginBottom:8}} onClick={e=>e.stopPropagation()}>
+                      <input value={renameVal} onChange={e=>setRenameVal(e.target.value)}
+                        autoFocus
+                        onKeyDown={e=>{if(e.key==='Enter')saveRename(t.id);if(e.key==='Escape')setRenamingId(null);}}
+                        style={{flex:1,background:'var(--sf2)',border:'1px solid var(--am)',borderRadius:6,
+                          padding:'6px 10px',color:'var(--tx)',outline:'none',fontSize:14,fontWeight:600}}/>
+                      <button onClick={()=>saveRename(t.id)}
+                        style={{padding:'6px 12px',borderRadius:6,background:'var(--am)',
+                          color:'#1a0e00',fontWeight:700,fontSize:13}}>✓</button>
+                      <button onClick={()=>setRenamingId(null)}
+                        style={{padding:'6px 10px',borderRadius:6,background:'var(--sf2)',
+                          border:'1px solid var(--bd)',fontSize:13,color:'var(--tx2)'}}>✕</button>
+                    </div>
+                  :<div style={{fontWeight:700,fontSize:15,marginBottom:3,
+                      overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name}</div>
+                }
+                <div style={{fontSize:11,color:'var(--tx3)',marginBottom:9}}>
+                  Created {fmt(t.createdAt)} · {t.assignments.length} item type{t.assignments.length!==1?'s':''}
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <div style={{flex:1,height:4,background:'var(--sf3)',borderRadius:2,overflow:'hidden'}}>
+                    <div style={{height:'100%',borderRadius:2,
+                      width:`${pct}%`,background:pct===100?'var(--gn)':'var(--am)',transition:'width .3s'}}/>
+                  </div>
+                  <span style={{fontSize:11,color:'var(--tx3)',flexShrink:0}}>{pk}/{tot} packed</span>
+                </div>
+              </div>
+              {!isRenaming&&<>
+                <button
+                  onClick={e=>{e.stopPropagation();setRenamingId(t.id);setRenameVal(t.name);}}
+                  title="Rename trip"
+                  style={{color:'var(--tx3)',fontSize:14,padding:'4px 8px',borderRadius:5,
+                    flexShrink:0,transition:'color .15s'}}
+                  onMouseEnter={e=>e.currentTarget.style.color='var(--am)'}
+                  onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>✎</button>
+                <button
+                  onClick={e=>{e.stopPropagation();if(window.confirm(`Delete "${t.name}"?`))onDelete(t.id);}}
+                  style={{color:'var(--tx3)',fontSize:16,padding:'4px 8px',borderRadius:5,
+                    flexShrink:0,transition:'color .15s'}}
+                  onMouseEnter={e=>e.currentTarget.style.color='var(--rd)'}
+                  onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>✕</button>
+              </>}
+            </div>;
+          })}
+        </div>
+      </>}
+
+      {/* Import */}
+      <div style={{textAlign:'center'}}>
+        <input ref={fRef} type="file" accept=".json" style={{display:'none'}}
+          onChange={e=>{
+            const f=e.target.files[0];if(!f)return;
+            const r=new FileReader();r.onload=ev=>onImport(ev.target.result);r.readAsText(f);
+          }}/>
+        <button onClick={()=>fRef.current?.click()} style={{padding:'10px 24px',borderRadius:8,
+          background:'var(--sf)',border:'1px solid var(--bd)',fontSize:13,color:'var(--tx2)'}}>
+          ↑ Import Trip from File
+        </button>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ── APP ─────────────────────────────────────────────────────────── */
+function App(){
+  const init=loadData();
+  const [trips,setTrips]=useState(init.trips||[]);
+  const [screen,setScreen]=useState('home');
+  const [activeId,setActiveId]=useState(null);
+  const [view,setView]=useState('board');
+  const [drawerItem,setDrawerItem]=useState(null);
+  const [pickerLoc,setPickerLoc]=useState(null);
+  const [modal,setModal]=useState(null);
+
+  useEffect(()=>{ saveData({trips,activeId}); },[trips,activeId]);
+
+  const trip=trips.find(t=>t.id===activeId)||null;
+  const mut=fn=>setTrips(ts=>ts.map(t=>t.id===activeId?fn(t):t));
+
+  const addTrip=name=>{
+    const t=mkTrip(name);
+    setTrips(ts=>[...ts,t]);
+    setActiveId(t.id);
+    setScreen('trip');
+    setView('board');
+  };
+  const delTrip=id=>{
+    setTrips(ts=>ts.filter(t=>t.id!==id));
+    if(activeId===id){setActiveId(null);setScreen('home');}
+  };
+  const renameTrip=(id,name)=>setTrips(ts=>ts.map(t=>t.id===id?{...t,name}:t));
+  const importTrip=json=>{
+    try{
+      const t=JSON.parse(json);
+      const nt={...t,id:genId(),name:t.name+' (imported)'};
+      setTrips(ts=>[...ts,nt]);setActiveId(nt.id);setScreen('trip');
+    }catch{alert('Invalid trip file');}
+  };
+  const exportTrip=()=>{
+    if(!trip)return;
+    const b=new Blob([JSON.stringify(trip,null,2)],{type:'application/json'});
+    const u=URL.createObjectURL(b);
+    const a=document.createElement('a');
+    a.href=u;a.download=`${trip.name.replace(/\s+/g,'-')}-packing.json`;a.click();
+    URL.revokeObjectURL(u);
+  };
+
+  const addLoc=name=>mut(t=>({...t,locations:[...t.locations,
+    {id:genId(),name,color:LOC_COLORS[t.locations.length%LOC_COLORS.length]}]}));
+  const delLoc=id=>{
+    if(window.confirm('Delete this location and all its items?'))
+      mut(t=>({...t,locations:t.locations.filter(l=>l.id!==id),
+        assignments:t.assignments.filter(a=>a.locationId!==id)}));
+  };
+  const renameLoc=(id,name)=>mut(t=>({...t,locations:t.locations.map(l=>l.id===id?{...l,name}:l)}));
+
+  const renameItem=(id,name)=>mut(t=>({...t,items:t.items.map(i=>i.id===id?{...i,name}:i)}));
+  const delItem=id=>mut(t=>({...t,
+    items:t.items.filter(i=>i.id!==id),
+    assignments:t.assignments.filter(a=>a.itemId!==id)}));
+
+  const setAssign=(itemId,locationId,quantity)=>mut(t=>{
+    if(quantity<=0)return{...t,assignments:t.assignments.filter(a=>!(a.itemId===itemId&&a.locationId===locationId))};
+    const ex=t.assignments.find(a=>a.itemId===itemId&&a.locationId===locationId);
+    if(ex)return{...t,assignments:t.assignments.map(a=>
+      a.itemId===itemId&&a.locationId===locationId?{...a,quantity}:a)};
+    return{...t,assignments:[...t.assignments,{id:genId(),itemId,locationId,quantity,packed:false}]};
+  });
+  const togPacked=(itemId,locationId)=>mut(t=>({...t,
+    assignments:t.assignments.map(a=>
+      a.itemId===itemId&&a.locationId===locationId?{...a,packed:!a.packed}:a)}));
+
+  const goHome=()=>{setScreen('home');setDrawerItem(null);setPickerLoc(null);};
+  const openTrip=id=>{setActiveId(id);setScreen('trip');setDrawerItem(null);setPickerLoc(null);setView('board');};
+
+  const activeItem=trip?.items.find(i=>i.id===drawerItem);
+  const pickerLocObj=trip?.locations.find(l=>l.id===pickerLoc);
+
+  return <div style={{display:'flex',flexDirection:'column',height:'100vh',background:'var(--bg)'}}>
+
+    {screen==='home'&&<>
+      <div style={{display:'flex',alignItems:'center',padding:'0 20px',height:54,
+        background:'var(--sf)',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+        <div className="bb" style={{fontSize:24,color:'var(--am)',letterSpacing:3}}>PACKR</div>
+      </div>
+      <HomeScreen trips={trips} onCreate={addTrip} onSelect={openTrip}
+        onDelete={delTrip} onRename={renameTrip} onImport={importTrip}/>
+    </>}
+
+    {screen==='trip'&&trip&&<>
+      <TripHeader trip={trip} onHome={goHome}
+        onRename={name=>renameTrip(activeId,name)}
+        onExport={exportTrip} onImport={importTrip}
+        view={view} onView={setView}/>
+      {view==='board'
+        ?<Board trip={trip}
+            onAdd={id=>setPickerLoc(id)}
+            onToggle={togPacked} onQty={setAssign}
+            onOpen={id=>setDrawerItem(id)}
+            onAddLoc={()=>setModal({type:'add-loc'})}
+            onRenameLoc={id=>setModal({type:'rename-loc',id})}
+            onDelLoc={delLoc}/>
+        :<Summary trip={trip}/>
+      }
+
+      {activeItem&&<ItemDrawer item={activeItem} locations={trip.locations}
+        assignments={trip.assignments.filter(a=>a.itemId===activeItem.id)}
+        onClose={()=>setDrawerItem(null)}
+        onQty={(locId,qty)=>setAssign(activeItem.id,locId,qty)}
+        onToggle={locId=>togPacked(activeItem.id,locId)}
+        onRename={name=>renameItem(activeItem.id,name)}
+        onDel={()=>{delItem(activeItem.id);setDrawerItem(null);}}/>}
+
+      {pickerLocObj&&<Picker items={trip.items} assignments={trip.assignments}
+        locId={pickerLoc} loc={pickerLocObj}
+        onClose={()=>setPickerLoc(null)}
+        onSelect={itemId=>{setAssign(itemId,pickerLoc,1);setPickerLoc(null);setDrawerItem(itemId);}}
+        onCreateAdd={name=>{
+          const nid=genId();
+          mut(t=>({...t,
+            items:[...t.items,{id:nid,name,category:'Custom'}],
+            assignments:[...t.assignments,{id:genId(),itemId:nid,locationId:pickerLoc,quantity:1,packed:false}],
+          }));
+          setPickerLoc(null);setDrawerItem(nid);
+        }}/>}
+
+      {modal?.type==='add-loc'&&<Modal title="Add Location" onClose={()=>setModal(null)}>
+        <NameInput placeholder="E.g. Hotel Safe" onSubmit={n=>{addLoc(n);setModal(null);}}/>
+      </Modal>}
+      {modal?.type==='rename-loc'&&<Modal title="Rename Location" onClose={()=>setModal(null)}>
+        <NameInput defVal={trip.locations.find(l=>l.id===modal.id)?.name||''}
+          onSubmit={n=>{renameLoc(modal.id,n);setModal(null);}}/>
+      </Modal>}
+    </>}
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
