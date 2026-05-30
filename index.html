@@ -7,6 +7,7 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -43,65 +44,74 @@ input,textarea{font-family:inherit;font-size:14px}
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
-/* ── STORAGE ─────────────────────────────────────────────────────── */
-const SKEY = 'packr-v4';
-const loadData = () => { try { const s=localStorage.getItem(SKEY); return s?JSON.parse(s):{trips:[]}; } catch { return {trips:[]}; } };
-const saveData = d => { try { localStorage.setItem(SKEY,JSON.stringify(d)); } catch {} };
+/* ── SUPABASE ────────────────────────────────────────────────────── */
+const SUPA_URL = 'https://oroachpdvlczplpqspmd.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yb2FjaHBkdmxjenBscHFzcG1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNzIwMTgsImV4cCI6MjA5NTY0ODAxOH0.oSeTXyeqel9CFfWyT82c8IAek6SrIup8brdvJJ_u_F4';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 
 /* ── CONSTANTS ───────────────────────────────────────────────────── */
 const genId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
 const LOC_COLORS = ['#F59E0B','#10B981','#3B82F6','#A855F7','#EF4444','#06B6D4','#F97316','#EC4899'];
 
+// bagWeight = tare weight of the bag itself in grams
 const DEFAULT_LOCS = [
-  {id:'l1',name:'Wearing',color:'#F59E0B'},
-  {id:'l2',name:'Personal Item',color:'#10B981'},
-  {id:'l3',name:'Carry-on',color:'#3B82F6'},
-  {id:'l4',name:'Checked Bag',color:'#A855F7'},
+  {id:'l1',name:'Wearing',       color:'#F59E0B', bagWeight:0},
+  {id:'l2',name:'Personal Item', color:'#10B981', bagWeight:400},
+  {id:'l3',name:'Carry-on',      color:'#3B82F6', bagWeight:1800},
+  {id:'l4',name:'Checked Bag',   color:'#A855F7', bagWeight:3000},
 ];
 
+// [name, category, weightGrams]
 const ITEM_TPLS = [
-  ['Underwear','Clothing'],['Socks – Casual','Clothing'],['Socks – Work','Clothing'],
-  ['Business Shirt','Clothing'],['Linen Shirt','Clothing'],['T-Shirt','Clothing'],
-  ['Jumper – Formal','Clothing'],['Jumper – Casual','Clothing'],
-  ['Suit Pant','Clothing'],['Suit Jacket','Clothing'],
-  ['Chino – Navy','Clothing'],['Chino – Tan','Clothing'],
-  ['Pant – Lightweight','Clothing'],['Shorts – Formal','Clothing'],['Shorts – Casual','Clothing'],
-  ['Bathers','Clothing'],['Jeans','Clothing'],['Belt','Clothing'],['Collar Stays','Clothing'],
-  ['Tie','Clothing'],['Cufflinks','Clothing'],['Jacket','Clothing'],['Rain Jacket','Clothing'],
-  ['Hat – Sun','Clothing'],['Scarf','Clothing'],['Gym Shorts','Clothing'],['Gym Shirt','Clothing'],
-  ['Casual Shoes','Footwear'],['Business Shoes','Footwear'],['Thongs','Footwear'],
-  ['Slippers','Footwear'],['Running Shoes','Footwear'],
-  ['Laptop – Work','Electronics'],['Laptop – Personal','Electronics'],
-  ['Laptop Charger – Work','Electronics'],['Laptop Charger – Personal','Electronics'],
-  ['Mouse','Electronics'],['Keyboard','Electronics'],['e-Book','Electronics'],
-  ['Powerbank','Electronics'],['Powerboard','Electronics'],
-  ['Headphones – Plane','Electronics'],['Headphones – Bluetooth','Electronics'],
-  ['USB Brick','Electronics'],['Power Adaptor','Electronics'],
-  ['Phone – Personal','Electronics'],['Phone – Work','Electronics'],
-  ['Phone Charger – Personal','Electronics'],['Phone Charger – Work','Electronics'],
-  ['Camera','Electronics'],['Camera Lens','Electronics'],
-  ['Camera Battery','Electronics'],['Camera SD Card','Electronics'],
-  ['Smart Watch','Electronics'],['Watch Charger','Electronics'],
-  ['Tablet','Electronics'],['Tablet Charger','Electronics'],
-  ['Glasses','Accessories'],['Sunglasses','Accessories'],['Water Bottle','Accessories'],
-  ['Fan','Accessories'],['Towel','Accessories'],['Travel Pillow','Accessories'],
-  ['Eye Mask','Accessories'],['Ear Plugs','Accessories'],['Umbrella','Accessories'],
-  ['Watch','Accessories'],['Luggage Lock','Accessories'],['Laundry Bag','Accessories'],
-  ['Packing Cubes','Accessories'],['Cable Organiser','Accessories'],
-  ['Passport Wallet','Documents & Finance'],['Travel SIM','Documents & Finance'],
-  ['Notepad','Documents & Finance'],['Pen','Documents & Finance'],
-  ['Wallet','Documents & Finance'],['Cash / Currency','Documents & Finance'],
-  ['Travel Insurance Docs','Documents & Finance'],['Boarding Pass','Documents & Finance'],
-  ['Toiletries','Toiletries & Health'],['Medication','Toiletries & Health'],
-  ['Sunscreen','Toiletries & Health'],['Insect Repellent','Toiletries & Health'],
-  ['Hand Sanitiser','Toiletries & Health'],['Vitamins','Toiletries & Health'],
-  ['Lip Balm','Toiletries & Health'],
+  ['Underwear','Clothing',35],['Socks – Casual','Clothing',40],['Socks – Work','Clothing',50],
+  ['Business Shirt','Clothing',200],['Linen Shirt','Clothing',180],['T-Shirt','Clothing',150],
+  ['Jumper – Formal','Clothing',400],['Jumper – Casual','Clothing',350],
+  ['Suit Pant','Clothing',400],['Suit Jacket','Clothing',600],
+  ['Chino – Navy','Clothing',450],['Chino – Tan','Clothing',450],
+  ['Pant – Lightweight','Clothing',280],['Shorts – Formal','Clothing',250],['Shorts – Casual','Clothing',180],
+  ['Bathers','Clothing',150],['Jeans','Clothing',600],['Belt','Clothing',140],['Collar Stays','Clothing',10],
+  ['Tie','Clothing',75],['Cufflinks','Clothing',30],['Jacket','Clothing',800],['Rain Jacket','Clothing',350],
+  ['Hat – Sun','Clothing',100],['Scarf','Clothing',90],['Gym Shorts','Clothing',140],['Gym Shirt','Clothing',110],
+  ['Casual Shoes','Footwear',600],['Business Shoes','Footwear',800],['Thongs','Footwear',180],
+  ['Slippers','Footwear',220],['Running Shoes','Footwear',700],
+  ['Laptop – Work','Electronics',1800],['Laptop – Personal','Electronics',1400],
+  ['Laptop Charger – Work','Electronics',190],['Laptop Charger – Personal','Electronics',190],
+  ['Mouse','Electronics',90],['Keyboard','Electronics',750],['e-Book','Electronics',190],
+  ['Powerbank','Electronics',280],['Powerboard','Electronics',380],
+  ['Headphones – Plane','Electronics',200],['Headphones – Bluetooth','Electronics',240],
+  ['USB Brick','Electronics',75],['Power Adaptor','Electronics',110],
+  ['Phone – Personal','Electronics',175],['Phone – Work','Electronics',175],
+  ['Phone Charger – Personal','Electronics',35],['Phone Charger – Work','Electronics',35],
+  ['Camera','Electronics',500],['Camera Lens','Electronics',380],
+  ['Camera Battery','Electronics',75],['Camera SD Card','Electronics',2],
+  ['Smart Watch','Electronics',45],['Watch Charger','Electronics',25],
+  ['Tablet','Electronics',450],['Tablet Charger','Electronics',75],
+  ['Glasses','Accessories',25],['Sunglasses','Accessories',25],['Water Bottle','Accessories',180],
+  ['Fan','Accessories',280],['Towel','Accessories',380],['Travel Pillow','Accessories',190],
+  ['Eye Mask','Accessories',18],['Ear Plugs','Accessories',4],['Umbrella','Accessories',260],
+  ['Watch','Accessories',80],['Luggage Lock','Accessories',35],['Laundry Bag','Accessories',45],
+  ['Packing Cubes','Accessories',130],['Cable Organiser','Accessories',70],
+  ['Passport Wallet','Documents & Finance',55],['Travel SIM','Documents & Finance',2],
+  ['Notepad','Documents & Finance',100],['Pen','Documents & Finance',18],
+  ['Wallet','Documents & Finance',75],['Cash / Currency','Documents & Finance',40],
+  ['Travel Insurance Docs','Documents & Finance',15],['Boarding Pass','Documents & Finance',5],
+  ['Toiletries','Toiletries & Health',450],['Medication','Toiletries & Health',50],
+  ['Sunscreen','Toiletries & Health',190],['Insect Repellent','Toiletries & Health',90],
+  ['Hand Sanitiser','Toiletries & Health',90],['Vitamins','Toiletries & Health',70],
+  ['Lip Balm','Toiletries & Health',18],
 ];
+
+const fmtW = g => {
+  if (g === 0) return '0g';
+  if (g < 1000) return `${g}g`;
+  const kg = g / 1000;
+  return `${kg % 1 === 0 ? kg.toFixed(0) : kg.toFixed(1)}kg`;
+};
 
 const mkTrip = name => ({
   id:genId(), name, createdAt:Date.now(),
   locations: DEFAULT_LOCS.map(l=>({...l,id:genId()})),
-  items: ITEM_TPLS.map(([n,c])=>({id:genId(),name:n,category:c})),
+  items: ITEM_TPLS.map(([n,c,w])=>({id:genId(),name:n,category:c,weight:w})),
   assignments:[],
 });
 
@@ -182,7 +192,7 @@ function ItemCard({item,a,locColor,onToggle,onQty,onOpen}){
 }
 
 /* ── LOCATION COLUMN ─────────────────────────────────────────────── */
-function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onDel}){
+function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSetBagWeight,onDel}){
   const [menu,setMenu]=useState(false);
   const mRef=useRef();
   useEffect(()=>{
@@ -199,25 +209,37 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onDe
   const done=total>0&&packed===total;
   const sorted=[...la].sort((a,b)=>(a.packed?1:0)-(b.packed?1:0));
 
+  const bagW = loc.bagWeight ?? 0;
+  const contentsW = la.reduce((s,a)=>{ const item=items.find(i=>i.id===a.itemId); return s+(item?.weight??200)*a.quantity; },0);
+  const totalW = bagW + contentsW;
+
   return <div style={{width:274,flexShrink:0,background:'var(--sf)',border:'1px solid var(--bd)',
     borderTop:`3px solid ${loc.color}`,borderRadius:10,
     display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
     
     <div style={{padding:'12px 12px 10px',flexShrink:0}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
         <div className="bb" style={{fontSize:18,color:loc.color,letterSpacing:2}}>{loc.name}</div>
-        <div style={{position:'relative'}} ref={mRef}>
-          <button onClick={()=>setMenu(m=>!m)}
-            style={{color:'var(--tx3)',fontSize:19,padding:'1px 5px',borderRadius:4,
-              background:menu?'var(--sf3)':'transparent'}}>⋯</button>
-          {menu&&<div style={{position:'absolute',right:0,top:'calc(100% + 4px)',
-            background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,
-            zIndex:20,width:154,boxShadow:'0 10px 28px rgba(0,0,0,.55)',overflow:'hidden'}}>
-            <button onClick={()=>{onRename();setMenu(false);}}
-              style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>Rename</button>
-            <button onClick={()=>{onDel();setMenu(false);}}
-              style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--rd)',textAlign:'left'}}>Delete</button>
-          </div>}
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontSize:14,fontWeight:700,color:'var(--tx)',fontFamily:'Outfit,sans-serif'}}>~{fmtW(totalW)}</div>
+            {bagW>0&&<div style={{fontSize:9,color:'var(--tx3)',lineHeight:1}}>bag: {fmtW(bagW)}</div>}
+          </div>
+          <div style={{position:'relative'}} ref={mRef}>
+            <button onClick={()=>setMenu(m=>!m)}
+              style={{color:'var(--tx3)',fontSize:19,padding:'1px 5px',borderRadius:4,
+                background:menu?'var(--sf3)':'transparent'}}>⋯</button>
+            {menu&&<div style={{position:'absolute',right:0,top:'calc(100% + 4px)',
+              background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,
+              zIndex:20,width:168,boxShadow:'0 10px 28px rgba(0,0,0,.55)',overflow:'hidden'}}>
+              <button onClick={()=>{onRename();setMenu(false);}}
+                style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>Rename</button>
+              <button onClick={()=>{onSetBagWeight();setMenu(false);}}
+                style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>Set bag weight</button>
+              <button onClick={()=>{onDel();setMenu(false);}}
+                style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--rd)',textAlign:'left'}}>Delete</button>
+            </div>}
+          </div>
         </div>
       </div>
       <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--tx3)',marginBottom:7}}>
@@ -260,11 +282,23 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onDe
 }
 
 /* ── ITEM DRAWER ─────────────────────────────────────────────────── */
-function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,onDel}){
+function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,onSetWeight,onDel}){
   const [editVal,setEditVal]=useState(null);
+  const [editingWeight,setEditingWeight]=useState(false);
+  const [weightVal,setWeightVal]=useState('');
+  const wRef=useRef();
   const totalQty=assignments.reduce((s,a)=>s+a.quantity,0);
   const packedQty=assignments.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+  const itemWeight = item.weight ?? 200;
+  const totalWeight = itemWeight * totalQty;
   const saveRename=()=>{if(editVal?.trim())onRename(editVal.trim());setEditVal(null);};
+  const startWeight=()=>{setWeightVal(String(itemWeight));setEditingWeight(true);};
+  const saveWeight=()=>{
+    const v=parseInt(weightVal);
+    if(!isNaN(v)&&v>=0)onSetWeight(v);
+    setEditingWeight(false);
+  };
+  useEffect(()=>{if(editingWeight)wRef.current?.focus();},[editingWeight]);
 
   return <>
     <Veil onClick={onClose} alpha={.38}/>
@@ -288,13 +322,44 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
           </div>
           <button onClick={onClose} style={{color:'var(--tx2)',fontSize:19,flexShrink:0}}>✕</button>
         </div>
-        <div style={{display:'flex',gap:8}}>
+
+        {/* Stats row */}
+        <div style={{display:'flex',gap:8,marginBottom:12}}>
           {[['Total',totalQty,'var(--am)'],['Packed',packedQty,'var(--gn)'],['To Pack',totalQty-packedQty,'var(--tx2)']].map(([l,v,c])=>(
             <div key={l} style={{flex:1,background:'var(--sf2)',borderRadius:7,padding:'8px 10px',textAlign:'center'}}>
               <div style={{fontSize:21,fontWeight:700,color:c}}>{v}</div>
               <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>{l}</div>
             </div>
           ))}
+        </div>
+
+        {/* Weight row */}
+        <div style={{background:'var(--sf2)',borderRadius:8,padding:'9px 12px',
+          display:'flex',alignItems:'center',gap:8}}>
+          <div style={{fontSize:11,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,flex:1}}>
+            Weight per item
+          </div>
+          {editingWeight
+            ?<div style={{display:'flex',gap:6,alignItems:'center'}}>
+                <input ref={wRef} value={weightVal} onChange={e=>setWeightVal(e.target.value.replace(/\D/,''))}
+                  onKeyDown={e=>{if(e.key==='Enter')saveWeight();if(e.key==='Escape')setEditingWeight(false);}}
+                  onBlur={saveWeight}
+                  style={{width:64,background:'var(--sf3)',border:'1px solid var(--am)',borderRadius:5,
+                    padding:'3px 7px',color:'var(--tx)',fontSize:13,fontWeight:700,outline:'none',textAlign:'center'}}/>
+                <span style={{fontSize:11,color:'var(--tx3)'}}>g</span>
+              </div>
+            :<button onClick={startWeight}
+                style={{display:'flex',alignItems:'center',gap:6,padding:'3px 7px',borderRadius:5,
+                  background:'var(--sf3)',border:'none',transition:'background .12s'}}
+                onMouseEnter={e=>e.currentTarget.style.background='var(--bd)'}
+                onMouseLeave={e=>e.currentTarget.style.background='var(--sf3)'}>
+                <span style={{fontSize:13,fontWeight:700,color:'var(--tx)'}}>{fmtW(itemWeight)}</span>
+                <span style={{fontSize:10,color:'var(--tx3)'}}>✎</span>
+              </button>
+          }
+          <div style={{fontSize:12,color:'var(--tx2)',borderLeft:'1px solid var(--bd)',paddingLeft:10,marginLeft:2}}>
+            ~{fmtW(totalWeight)} total
+          </div>
         </div>
       </div>
 
@@ -306,6 +371,7 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
           {locations.map(loc=>{
             const a=assignments.find(x=>x.locationId===loc.id);
             const qty=a?.quantity||0;
+            const locW=itemWeight*qty;
             return <div key={loc.id} style={{borderRadius:8,padding:'11px 13px',
               background:qty>0?'var(--sf2)':'transparent',
               border:`1px solid ${qty>0?loc.color+'40':'var(--bd)'}`,
@@ -314,7 +380,7 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
               <div style={{flex:1}}>
                 <div style={{fontWeight:600,fontSize:13,color:qty>0?'var(--tx)':'var(--tx3)'}}>{loc.name}</div>
                 {qty>0&&a&&<div style={{fontSize:11,marginTop:2,color:a.packed?'var(--gn)':'var(--tx3)'}}>
-                  {a.packed?'✓ Packed':'Not yet packed'}
+                  {a.packed?'✓ Packed':'Not yet packed'}{qty>0?` · ~${fmtW(locW)}`:''}
                 </div>}
               </div>
               {qty>0&&a&&<PackBox packed={a.packed} onChange={()=>onToggle(loc.id)}/>}
@@ -435,9 +501,9 @@ function StatusDot({packed}){
         border:'1.5px solid var(--sf3)',flexShrink:0}}/>;
 }
 
-function ListView({groups}){
+function ListView({groups,items,showWeight}){
   if(!groups.length) return <Empty/>;
-  return groups.map(({loc,rows})=>{
+  return groups.map(({loc,rows,totalW})=>{
     const lTotal=rows.reduce((s,a)=>s+a.quantity,0);
     const lPacked=rows.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
     return <div key={loc.id} style={{background:'var(--sf)',border:'1px solid var(--bd)',
@@ -445,23 +511,30 @@ function ListView({groups}){
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
         padding:'11px 16px',borderBottom:'1px solid var(--bd)'}}>
         <div className="bb" style={{fontSize:17,color:loc.color}}>{loc.name}</div>
-        <div style={{fontSize:12,color:'var(--tx2)'}}>{lPacked}/{lTotal} packed</div>
+        <div style={{display:'flex',gap:14,alignItems:'center'}}>
+          {showWeight&&<div style={{fontSize:13,fontWeight:700,color:'var(--tx2)'}}>~{fmtW(totalW)}</div>}
+          <div style={{fontSize:12,color:'var(--tx2)'}}>{lPacked}/{lTotal} packed</div>
+        </div>
       </div>
       <table style={{width:'100%',borderCollapse:'collapse'}}>
         <thead>
           <tr style={{background:'var(--sf2)'}}>
             <th style={{padding:'7px 16px',width:28}}></th>
             <th style={{padding:'7px 16px',textAlign:'left',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600}}>Item</th>
-            <th style={{padding:'7px 16px',textAlign:'center',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600,width:60}}>Qty</th>
+            <th style={{padding:'7px 16px',textAlign:'center',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600,width:50}}>Qty</th>
+            {showWeight&&<th style={{padding:'7px 16px',textAlign:'right',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600,width:80}}>Weight</th>}
             <th style={{padding:'7px 16px',textAlign:'center',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600,width:88}}>Status</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map(a=>(
-            <tr key={a.id} style={{borderTop:'1px solid var(--bd)',background:a.packed?'rgba(63,214,138,.06)':'transparent'}}>
+          {rows.map(a=>{
+            const itemObj=items.find(i=>i.id===a.itemId);
+            const rowW=(itemObj?.weight??200)*a.quantity;
+            return <tr key={a.id} style={{borderTop:'1px solid var(--bd)',background:a.packed?'rgba(63,214,138,.06)':'transparent'}}>
               <td style={{padding:'8px 0 8px 16px',textAlign:'center'}}><StatusDot packed={a.packed}/></td>
               <td style={{padding:'8px 16px',fontSize:13,color:'var(--tx)'}}>{a.item.name}</td>
               <td style={{padding:'8px 16px',textAlign:'center',fontSize:13,fontWeight:700}}>{a.quantity}</td>
+              {showWeight&&<td style={{padding:'8px 16px',textAlign:'right',fontSize:12,color:'var(--tx3)'}}>{fmtW(rowW)}</td>}
               <td style={{padding:'8px 16px',textAlign:'center'}}>
                 <span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:4,
                   textTransform:'uppercase',letterSpacing:.5,
@@ -470,18 +543,18 @@ function ListView({groups}){
                   {a.packed?'Packed':'To Pack'}
                 </span>
               </td>
-            </tr>
-          ))}
+            </tr>;
+          })}
         </tbody>
       </table>
     </div>;
   });
 }
 
-function BoardSummary({groups}){
+function BoardSummary({groups,showWeight}){
   if(!groups.length) return <Empty/>;
   return <div style={{display:'flex',gap:14,overflowX:'auto',paddingBottom:12,alignItems:'flex-start'}}>
-    {groups.map(({loc,rows})=>{
+    {groups.map(({loc,rows,totalW})=>{
       const lTotal=rows.reduce((s,a)=>s+a.quantity,0);
       const lPacked=rows.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
       const pct=lTotal>0?(lPacked/lTotal)*100:0;
@@ -489,7 +562,10 @@ function BoardSummary({groups}){
         border:'1px solid var(--bd)',borderTop:`3px solid ${loc.color}`,
         borderRadius:10,overflow:'hidden',flexShrink:0}}>
         <div style={{padding:'11px 14px 10px',borderBottom:'1px solid var(--bd)'}}>
-          <div className="bb" style={{fontSize:16,color:loc.color,marginBottom:6}}>{loc.name}</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:4}}>
+            <div className="bb" style={{fontSize:16,color:loc.color}}>{loc.name}</div>
+            {showWeight&&<div style={{fontSize:13,fontWeight:700,color:'var(--tx2)'}}>~{fmtW(totalW)}</div>}
+          </div>
           <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--tx3)',marginBottom:6}}>
             <span>{rows.length} item{rows.length!==1?'s':''}</span>
             <span style={{color:pct===100?'var(--gn)':'var(--tx3)'}}>{lPacked}/{lTotal}</span>
@@ -499,22 +575,23 @@ function BoardSummary({groups}){
           </div>
         </div>
         <div>
-          {rows.map(a=>(
-            <div key={a.id} style={{display:'flex',alignItems:'center',gap:9,
+          {rows.map(a=>{
+            const itemObj=loc._items?.find(i=>i.id===a.itemId);
+            return <div key={a.id} style={{display:'flex',alignItems:'center',gap:9,
               padding:'7px 14px',borderBottom:'1px solid var(--bd)',
               background:a.packed?'rgba(63,214,138,.05)':'transparent'}}>
               <StatusDot packed={a.packed}/>
               <span style={{flex:1,fontSize:12,color:'var(--tx)'}}>{a.item.name}</span>
               <span style={{fontSize:12,fontWeight:700,color:'var(--tx2)',flexShrink:0}}>×{a.quantity}</span>
-            </div>
-          ))}
+            </div>;
+          })}
         </div>
       </div>;
     })}
   </div>;
 }
 
-function GridSummary({trip}){
+function GridSummary({trip,showWeight}){
   const locs=trip.locations;
   const assignedItems=trip.items.filter(item=>trip.assignments.some(a=>a.itemId===item.id));
   if(!assignedItems.length) return <Empty/>;
@@ -525,11 +602,17 @@ function GridSummary({trip}){
 
   const locStats=locs.map(loc=>{
     const la=trip.assignments.filter(a=>a.locationId===loc.id);
-    return{total:la.reduce((s,a)=>s+a.quantity,0),packed:la.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0)};
+    const contentsW=la.reduce((s,a)=>{const it=trip.items.find(i=>i.id===a.itemId);return s+(it?.weight??200)*a.quantity;},0);
+    const totalW=(loc.bagWeight??0)+contentsW;
+    return{
+      total:la.reduce((s,a)=>s+a.quantity,0),
+      packed:la.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0),
+      totalW,
+    };
   });
 
-  const cell=(itemId,loc)=>{
-    const a=trip.assignments.find(x=>x.itemId===itemId&&x.locationId===loc.id);
+  const cell=(item,loc)=>{
+    const a=trip.assignments.find(x=>x.itemId===item.id&&x.locationId===loc.id);
     if(!a) return <td key={loc.id} style={{padding:'5px 8px',textAlign:'center',
       border:'1px solid var(--bd)',color:'var(--tx3)',fontSize:11}}>–</td>;
     return <td key={loc.id} style={{padding:'5px 8px',textAlign:'center',border:'1px solid var(--bd)',
@@ -554,9 +637,12 @@ function GridSummary({trip}){
           {locs.map((loc,i)=>(
             <th key={loc.id} style={{...thStyle,color:loc.color,minWidth:90}}>
               {loc.name}
-              <div style={{fontSize:9,color:'var(--tx3)',fontWeight:400,marginTop:2}}>
+              <div style={{fontSize:9,color:'var(--tx3)',fontWeight:400,marginTop:1}}>
                 {locStats[i].packed}/{locStats[i].total}
               </div>
+              {showWeight&&<div style={{fontSize:9,color:loc.color,fontWeight:600,marginTop:1}}>
+                ~{fmtW(locStats[i].totalW)}
+              </div>}
             </th>
           ))}
         </tr>
@@ -575,9 +661,10 @@ function GridSummary({trip}){
               <tr key={item.id}>
                 <td style={{padding:'5px 12px',border:'1px solid var(--bd)',fontSize:12,
                   color:'var(--tx)',background:'var(--sf)',position:'sticky',left:0}}>
-                  {item.name}
+                  <div>{item.name}</div>
+                  {showWeight&&<div style={{fontSize:9,color:'var(--tx3)'}}>{fmtW(item.weight??200)} ea</div>}
                 </td>
-                {locs.map(loc=>cell(item.id,loc))}
+                {locs.map(loc=>cell(item,loc))}
               </tr>
             ))}
           </React.Fragment>
@@ -585,7 +672,7 @@ function GridSummary({trip}){
       </tbody>
     </table>
     <div style={{marginTop:10,fontSize:11,color:'var(--tx3)'}}>
-      Numbers show quantity · ✓ = packed · – = not assigned to this location
+      Numbers show quantity · ✓ = packed · – = not assigned to this location{showWeight?' · weights include bag tare':''}
     </div>
   </div>;
 }
@@ -599,17 +686,29 @@ function Empty(){
 /* ── SUMMARY ─────────────────────────────────────────────────────── */
 function Summary({trip}){
   const [sumView,setSumView]=useState('list');
+  const [showWeight,setShowWeight]=useState(true);
   const totalItems=trip.assignments.reduce((s,a)=>s+a.quantity,0);
   const packedItems=trip.assignments.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
   const pct=totalItems>0?(packedItems/totalItems)*100:0;
 
+  // Compute total weight across all locations (contents only, no double-counting bags)
+  const grandW=trip.locations.reduce((tot,loc)=>{
+    const bagW=loc.bagWeight??0;
+    const contW=trip.assignments
+      .filter(a=>a.locationId===loc.id)
+      .reduce((s,a)=>{const it=trip.items.find(i=>i.id===a.itemId);return s+(it?.weight??200)*a.quantity;},0);
+    return tot+bagW+contW;
+  },0);
+
   const groups=trip.locations.map(loc=>{
+    const bagW=loc.bagWeight??0;
     const rows=trip.assignments
       .filter(a=>a.locationId===loc.id)
       .map(a=>({...a,item:trip.items.find(i=>i.id===a.itemId)}))
       .filter(a=>a.item)
       .sort((a,b)=>(a.packed?1:0)-(b.packed?1:0));
-    return{loc,rows};
+    const contW=rows.reduce((s,a)=>{const it=trip.items.find(i=>i.id===a.itemId);return s+(it?.weight??200)*a.quantity;},0);
+    return{loc,rows,totalW:bagW+contW};
   }).filter(g=>g.rows.length>0);
 
   const viewOpts=[['list','List'],['board','Columns'],['grid','Grid']];
@@ -621,7 +720,7 @@ function Summary({trip}){
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
         marginBottom:20,flexWrap:'wrap',gap:10}} className="np">
         <div className="bb" style={{fontSize:28,color:'var(--am)'}}>Packing Summary</div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
           <div style={{display:'flex',background:'var(--sf2)',borderRadius:7,
             border:'1px solid var(--bd)',padding:2}}>
             {viewOpts.map(([v,l])=>(
@@ -633,6 +732,13 @@ function Summary({trip}){
               </button>
             ))}
           </div>
+          <button onClick={()=>setShowWeight(w=>!w)}
+            style={{padding:'5px 12px',borderRadius:6,fontSize:12,fontWeight:600,
+              background:showWeight?'var(--am-bg)':'var(--sf2)',
+              border:`1px solid ${showWeight?'var(--am)':'var(--bd)'}`,
+              color:showWeight?'var(--am)':'var(--tx2)'}}>
+            ⚖ Weights {showWeight?'On':'Off'}
+          </button>
           <button onClick={()=>window.print()} style={{padding:'8px 16px',borderRadius:7,
             background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:13}}>
             🖨 Print / Save PDF
@@ -648,6 +754,7 @@ function Summary({trip}){
             <div style={{fontSize:18,fontWeight:700}}>{trip.name}</div>
             <div style={{fontSize:12,color:'var(--tx2)',marginTop:2}}>
               {packedItems}/{totalItems} packed · {trip.assignments.length} item types · {trip.locations.length} locations
+              {showWeight&&<span style={{color:'var(--am)',fontWeight:600}}> · ~{fmtW(grandW)} total</span>}
             </div>
           </div>
           <div style={{flex:1,minWidth:120}}>
@@ -664,24 +771,59 @@ function Summary({trip}){
 
       {/* Grid hint */}
       {sumView==='grid'&&<div style={{fontSize:12,color:'var(--tx3)',marginBottom:12}} className="np">
-        Tip: this is the most compact view for printing — use your browser's "Fit to page" option for best results.
+        Tip: most compact for printing — use "Fit to page" in your browser print dialog.
       </div>}
 
-      {sumView==='list'&&<ListView groups={groups}/>}
-      {sumView==='board'&&<BoardSummary groups={groups}/>}
-      {sumView==='grid'&&<GridSummary trip={trip}/>}
+      {sumView==='list'&&<ListView groups={groups} items={trip.items} showWeight={showWeight}/>}
+      {sumView==='board'&&<BoardSummary groups={groups} showWeight={showWeight}/>}
+      {sumView==='grid'&&<GridSummary trip={trip} showWeight={showWeight}/>}
     </div>
   </div>;
 }
 
+/* ── BAG WEIGHT MODAL ────────────────────────────────────────────── */
+function BagWeightModal({loc,onClose,onSave}){
+  const [val,setVal]=useState(String(loc?.bagWeight??0));
+  const iRef=useRef();
+  useEffect(()=>{iRef.current?.focus();iRef.current?.select();},[]);
+  const save=()=>{const v=parseInt(val);if(!isNaN(v)&&v>=0)onSave(v);else onClose();};
+  return <Modal title={`Bag Weight — ${loc?.name}`} onClose={onClose}>
+    <div style={{fontSize:12,color:'var(--tx2)',marginBottom:10}}>
+      Tare weight of the empty bag itself (grams). This is added to the contents weight to give the total load.
+    </div>
+    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:16}}>
+      <input ref={iRef} value={val} onChange={e=>setVal(e.target.value.replace(/\D/,''))}
+        onKeyDown={e=>e.key==='Enter'&&save()}
+        style={{flex:1,background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:7,
+          padding:'9px 12px',color:'var(--tx)',outline:'none',fontSize:16,fontWeight:700,textAlign:'center'}}/>
+      <span style={{fontSize:14,color:'var(--tx2)',flexShrink:0}}>grams</span>
+    </div>
+    <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}}>
+      {[['No bag',0],['Tote',300],['Daypack',400],['Carry-on',1800],['Check-in (soft)',2500],['Check-in (hard)',3500]].map(([l,v])=>(
+        <button key={l} onClick={()=>setVal(String(v))}
+          style={{padding:'4px 10px',borderRadius:5,fontSize:11,fontWeight:600,
+            background:val===String(v)?'var(--am)':'var(--sf2)',
+            color:val===String(v)?'#1a0e00':'var(--tx2)',
+            border:`1px solid ${val===String(v)?'var(--am)':'var(--bd)'}`}}>
+          {l} {v>0?`(${fmtW(v)})` :''}
+        </button>
+      ))}
+    </div>
+    <button onClick={save} style={{width:'100%',padding:'10px',borderRadius:7,background:'var(--am)',
+      color:'#1a0e00',fontWeight:700,fontSize:13}}>Save</button>
+  </Modal>;
+}
+
 /* ── BOARD ───────────────────────────────────────────────────────── */
-function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onDelLoc}){
+function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onSetBagWeight,onDelLoc}){
   return <div style={{flex:1,display:'flex',gap:16,padding:20,
     overflowX:'auto',overflowY:'hidden',alignItems:'stretch'}}>
     {trip.locations.map(loc=>(
       <LocCol key={loc.id} loc={loc} items={trip.items} assignments={trip.assignments}
         onAdd={()=>onAdd(loc.id)} onToggle={onToggle} onQty={onQty} onOpen={onOpen}
-        onRename={()=>onRenameLoc(loc.id)} onDel={()=>onDelLoc(loc.id)}/>
+        onRename={()=>onRenameLoc(loc.id)}
+        onSetBagWeight={()=>onSetBagWeight(loc.id)}
+        onDel={()=>onDelLoc(loc.id)}/>
     ))}
     <button onClick={onAddLoc} style={{width:240,flexShrink:0,alignSelf:'flex-start',
       border:'1px dashed var(--bd)',borderRadius:10,padding:20,color:'var(--tx3)',
@@ -691,8 +833,48 @@ function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onDelLoc})
   </div>;
 }
 
+/* ── DISPLAY NAME ────────────────────────────────────────────────── */
+function DisplayName({user,onUpdate}){
+  const [editing,setEditing]=useState(false);
+  const [val,setVal]=useState('');
+  const [saving,setSaving]=useState(false);
+  const iRef=useRef();
+  const displayName=user?.user_metadata?.display_name||user?.email||'';
+
+  const start=()=>{setVal(user?.user_metadata?.display_name||'');setEditing(true);};
+  const save=async()=>{
+    const v=val.trim();
+    if(v&&v!==(user?.user_metadata?.display_name||'')){
+      setSaving(true);
+      const{data:{user:updated}}=await sb.auth.updateUser({data:{display_name:v}});
+      if(updated)onUpdate(updated);
+      setSaving(false);
+    }
+    setEditing(false);
+  };
+  useEffect(()=>{if(editing)iRef.current?.focus();},[editing]);
+
+  if(editing) return (
+    <input ref={iRef} value={val} onChange={e=>setVal(e.target.value)}
+      onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape')setEditing(false);}}
+      onBlur={save} placeholder="Your name"
+      style={{fontSize:12,background:'var(--sf2)',border:'1px solid var(--am)',
+        borderRadius:6,padding:'3px 9px',color:'var(--tx)',outline:'none',width:140}}/>
+  );
+  return (
+    <button onClick={start} title="Click to set display name"
+      style={{fontSize:12,color:'var(--tx3)',padding:'3px 8px',borderRadius:5,
+        maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+        transition:'background .12s'}}
+      onMouseEnter={e=>e.currentTarget.style.background='var(--sf2)'}
+      onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+      {displayName} ✎
+    </button>
+  );
+}
+
 /* ── TRIP HEADER ─────────────────────────────────────────────────── */
-function TripHeader({trip,onHome,onRename,onExport,onImport,view,onView}){
+function TripHeader({trip,onHome,onRename,onExport,onImport,onSignOut,user,onUpdateUser,onSaveTemplate,onApplyTemplate,view,onView}){
   const [editing,setEditing]=useState(false);
   const [val,setVal]=useState('');
   const fRef=useRef();
@@ -702,27 +884,25 @@ function TripHeader({trip,onHome,onRename,onExport,onImport,view,onView}){
   const save=()=>{if(val.trim()&&val.trim()!==trip.name)onRename(val.trim());setEditing(false);};
   useEffect(()=>{if(editing)iRef.current?.focus();},[editing]);
 
-  return <div className="np" style={{display:'flex',alignItems:'center',gap:12,
-    padding:'0 20px',height:54,background:'var(--sf)',
+  return <div className="np" style={{display:'flex',alignItems:'center',gap:10,
+    padding:'0 16px',height:54,background:'var(--sf)',
     borderBottom:'1px solid var(--bd)',flexShrink:0}}>
     <button onClick={onHome} className="bb"
-      style={{fontSize:24,color:'var(--am)',letterSpacing:3,padding:0,transition:'opacity .15s'}}
+      style={{fontSize:24,color:'var(--am)',letterSpacing:3,padding:0,transition:'opacity .15s',flexShrink:0}}
       onMouseEnter={e=>e.currentTarget.style.opacity='.65'}
       onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
       PACKR
     </button>
-    <span style={{color:'var(--bd)',fontSize:18,userSelect:'none'}}>/</span>
+    <span style={{color:'var(--bd)',fontSize:18,userSelect:'none',flexShrink:0}}>/</span>
 
     {editing
       ?<input ref={iRef} value={val} onChange={e=>setVal(e.target.value)}
           onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape')setEditing(false);}}
           onBlur={save}
           style={{fontSize:14,fontWeight:600,background:'var(--sf2)',border:'1px solid var(--am)',
-            borderRadius:6,padding:'3px 8px',color:'var(--tx)',outline:'none',
-            maxWidth:240,minWidth:80}}/>
-      :<button onClick={startEdit}
-          title="Click to rename"
-          style={{fontSize:14,fontWeight:600,color:'var(--tx2)',maxWidth:240,padding:'3px 7px',
+            borderRadius:6,padding:'3px 8px',color:'var(--tx)',outline:'none',maxWidth:200,minWidth:80}}/>
+      :<button onClick={startEdit} title="Click to rename"
+          style={{fontSize:14,fontWeight:600,color:'var(--tx2)',maxWidth:200,padding:'3px 7px',
             borderRadius:5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
             transition:'background .12s',textAlign:'left'}}
           onMouseEnter={e=>e.currentTarget.style.background='var(--sf2)'}
@@ -732,9 +912,9 @@ function TripHeader({trip,onHome,onRename,onExport,onImport,view,onView}){
     }
 
     <div style={{display:'flex',background:'var(--sf2)',borderRadius:7,
-      border:'1px solid var(--bd)',padding:2,marginLeft:4}}>
+      border:'1px solid var(--bd)',padding:2,marginLeft:4,flexShrink:0}}>
       {[['board','Board'],['summary','Summary']].map(([v,l])=>(
-        <button key={v} onClick={()=>onView(v)} style={{padding:'4px 14px',borderRadius:5,
+        <button key={v} onClick={()=>onView(v)} style={{padding:'4px 12px',borderRadius:5,
           fontSize:12,fontWeight:600,
           background:view===v?'var(--sf3)':'transparent',
           color:view===v?'var(--tx)':'var(--tx2)'}}>
@@ -744,20 +924,33 @@ function TripHeader({trip,onHome,onRename,onExport,onImport,view,onView}){
     </div>
 
     <div style={{flex:1}}/>
-    <button onClick={onExport} style={{padding:'5px 12px',borderRadius:6,fontSize:12,
-      background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)'}}>↓ Export</button>
+
+    <button onClick={onApplyTemplate} style={{padding:'5px 10px',borderRadius:6,fontSize:12,
+      background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)',flexShrink:0}}>
+      ⚡ Apply Template
+    </button>
+    <button onClick={onSaveTemplate} style={{padding:'5px 10px',borderRadius:6,fontSize:12,
+      background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--am)',flexShrink:0}}>
+      + Save Template
+    </button>
+    <button onClick={onExport} style={{padding:'5px 10px',borderRadius:6,fontSize:12,
+      background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)',flexShrink:0}}>↓ Export</button>
     <input ref={fRef} type="file" accept=".json" style={{display:'none'}}
       onChange={e=>{
         const f=e.target.files[0];if(!f)return;
         const r=new FileReader();r.onload=ev=>{onImport(ev.target.result);e.target.value='';};r.readAsText(f);
       }}/>
-    <button onClick={()=>fRef.current?.click()} style={{padding:'5px 12px',borderRadius:6,fontSize:12,
-      background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)'}}>↑ Import</button>
+    <button onClick={()=>fRef.current?.click()} style={{padding:'5px 10px',borderRadius:6,fontSize:12,
+      background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)',flexShrink:0}}>↑ Import</button>
+    <div style={{width:1,height:20,background:'var(--bd)',flexShrink:0}}/>
+    <DisplayName user={user} onUpdate={onUpdateUser}/>
+    <button onClick={onSignOut} style={{fontSize:12,color:'var(--tx3)',padding:'5px 10px',
+      borderRadius:6,border:'1px solid var(--bd)',background:'var(--sf2)',flexShrink:0}}>Sign out</button>
   </div>;
 }
 
 /* ── HOME SCREEN ─────────────────────────────────────────────────── */
-function HomeScreen({trips,onCreate,onSelect,onDelete,onRename,onImport}){
+function HomeScreen({trips,templates,onCreate,onSelect,onDelete,onRename,onImport,onDeleteTemplate,onApplyTemplate}){
   const [name,setName]=useState('');
   const [renamingId,setRenamingId]=useState(null);
   const [renameVal,setRenameVal]=useState('');
@@ -783,16 +976,17 @@ function HomeScreen({trips,onCreate,onSelect,onDelete,onRename,onImport}){
       <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,
         padding:'20px 22px',marginBottom:32}}>
         <div className="bb" style={{fontSize:17,color:'var(--am)',marginBottom:14}}>New Trip</div>
-        <div style={{display:'flex',gap:8}}>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
           <input value={name} onChange={e=>setName(e.target.value)}
             onKeyDown={e=>{ if(e.key==='Enter'&&name.trim()){onCreate(name.trim());setName('');} }}
             placeholder="E.g. Tokyo 2025, Bali Conference…"
-            style={{flex:1,background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:7,
+            style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:7,
               padding:'10px 14px',color:'var(--tx)',outline:'none',fontSize:14}}/>
           <button onClick={()=>{if(name.trim()){onCreate(name.trim());setName('');}}}
-            disabled={!name.trim()} style={{padding:'10px 22px',borderRadius:7,background:'var(--am)',
-              color:'#1a0e00',fontWeight:700,fontSize:14,opacity:name.trim()?1:.45}}>
-            Create
+            disabled={!name.trim()} style={{width:'100%',padding:'10px',borderRadius:7,
+              background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:14,
+              opacity:name.trim()?1:.45}}>
+            Create Trip
           </button>
         </div>
       </div>
@@ -862,6 +1056,33 @@ function HomeScreen({trips,onCreate,onSelect,onDelete,onRename,onImport}){
         </div>
       </>}
 
+      {/* Templates */}
+      {templates&&templates.length>0&&<>
+        <div className="bb" style={{fontSize:17,color:'var(--tx2)',marginBottom:14}}>Your Templates</div>
+        <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:32}}>
+          {templates.slice().sort((a,b)=>b.createdAt-a.createdAt).map(tpl=>(
+            <div key={tpl.id} style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,
+              padding:'13px 18px',display:'flex',alignItems:'center',gap:12}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:14,marginBottom:2}}>{tpl.name}</div>
+                <div style={{fontSize:11,color:'var(--tx3)'}}>
+                  {tpl.assignments.length} item{tpl.assignments.length!==1?'s':''} · Created {fmt(tpl.createdAt)}
+                </div>
+              </div>
+              <button onClick={()=>onApplyTemplate(tpl.id)}
+                style={{padding:'5px 12px',borderRadius:6,fontSize:12,fontWeight:600,
+                  background:'var(--am-bg)',border:'1px solid var(--am)',color:'var(--am)',flexShrink:0}}>
+                Apply
+              </button>
+              <button onClick={()=>{if(window.confirm(`Delete template "${tpl.name}"?`))onDeleteTemplate(tpl.id);}}
+                style={{color:'var(--tx3)',fontSize:15,padding:'4px 8px',borderRadius:5,flexShrink:0}}
+                onMouseEnter={e=>e.currentTarget.style.color='var(--rd)'}
+                onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>✕</button>
+            </div>
+          ))}
+        </div>
+      </>}
+
       {/* Import */}
       <div style={{textAlign:'center'}}>
         <input ref={fRef} type="file" accept=".json" style={{display:'none'}}
@@ -878,96 +1099,318 @@ function HomeScreen({trips,onCreate,onSelect,onDelete,onRename,onImport}){
   </div>;
 }
 
+/* ── TEMPLATE MODALS ─────────────────────────────────────────────── */
+function SaveTemplateModal({trip,onClose,onSave}){
+  const [name,setName]=useState('');
+  const iRef=useRef();
+  useEffect(()=>iRef.current?.focus(),[]);
+  const assignCount=trip.assignments.length;
+  return <Modal title="Save as Template" onClose={onClose}>
+    <div style={{fontSize:12,color:'var(--tx2)',marginBottom:14}}>
+      Saves all <strong style={{color:'var(--tx)'}}>{assignCount} item assignment{assignCount!==1?'s':''}</strong> from
+      this trip — including which bag each item goes in and how many — as a reusable template.
+    </div>
+    <NameInput placeholder="E.g. Business Trip, Beach Week…" onSubmit={n=>{onSave(n);onClose();}}/>
+  </Modal>;
+}
+
+function ApplyTemplateModal({templates,trip,onClose,onApply}){
+  if(!templates||templates.length===0) return <Modal title="Apply Template" onClose={onClose}>
+    <div style={{color:'var(--tx2)',fontSize:13,textAlign:'center',padding:'20px 0'}}>
+      No templates yet. Set up a trip and use "+ Save Template" to create one.
+    </div>
+  </Modal>;
+
+  const locNames=new Set(trip.locations.map(l=>l.name.toLowerCase()));
+  return <Modal title="Apply Template" onClose={onClose} w={440}>
+    <div style={{fontSize:12,color:'var(--tx2)',marginBottom:16}}>
+      Items will be added to matching locations. Locations that don't exist in this trip are skipped.
+    </div>
+    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+      {templates.slice().sort((a,b)=>b.createdAt-a.createdAt).map(tpl=>{
+        const matchedLocs=new Set(tpl.assignments.map(a=>a.locationName));
+        const matched=[...matchedLocs].filter(n=>locNames.has(n.toLowerCase()));
+        const skipped=[...matchedLocs].filter(n=>!locNames.has(n.toLowerCase()));
+        return <div key={tpl.id} style={{background:'var(--sf2)',border:'1px solid var(--bd)',
+          borderRadius:9,padding:'12px 14px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:14}}>{tpl.name}</div>
+              <div style={{fontSize:11,color:'var(--tx3)',marginTop:2}}>
+                {tpl.assignments.length} item{tpl.assignments.length!==1?'s':''}
+                {matched.length>0&&<span style={{color:'var(--gn)'}}> · ✓ {matched.join(', ')}</span>}
+                {skipped.length>0&&<span style={{color:'var(--tx3)'}}> · skipped: {skipped.join(', ')}</span>}
+              </div>
+            </div>
+            <button onClick={()=>{onApply(tpl.id);onClose();}}
+              style={{padding:'7px 16px',borderRadius:7,background:'var(--am)',
+                color:'#1a0e00',fontWeight:700,fontSize:13,flexShrink:0}}>
+              Apply
+            </button>
+          </div>
+        </div>;
+      })}
+    </div>
+  </Modal>;
+}
+
+/* ── LOADING SCREEN ──────────────────────────────────────────────── */
+function LoadingScreen({message='Loading…'}){
+  return <div style={{display:'flex',flexDirection:'column',height:'100vh',
+    background:'var(--bg)',alignItems:'center',justifyContent:'center',gap:14}}>
+    <div className="bb" style={{fontSize:48,color:'var(--am)',letterSpacing:4}}>PACKR</div>
+    <div style={{fontSize:13,color:'var(--tx3)'}}>{message}</div>
+  </div>;
+}
+
+/* ── AUTH SCREEN ─────────────────────────────────────────────────── */
+function AuthScreen(){
+  const [mode,setMode]=useState('signin');
+  const [email,setEmail]=useState('');
+  const [password,setPassword]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState('');
+  const [message,setMessage]=useState('');
+
+  const handle=async()=>{
+    if(!email||!password)return;
+    setLoading(true);setError('');setMessage('');
+    try{
+      if(mode==='signup'){
+        const{error:e}=await sb.auth.signUp({email,password});
+        if(e)throw e;
+        setMessage('Check your email to confirm your account, then sign in.');
+      }else{
+        const{error:e}=await sb.auth.signInWithPassword({email,password});
+        if(e)throw e;
+      }
+    }catch(e){setError(e.message);}
+    setLoading(false);
+  };
+
+  return <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:40}}>
+    <div style={{width:340}}>
+      <div className="bb" style={{fontSize:76,color:'var(--am)',letterSpacing:6,lineHeight:1,
+        marginBottom:8,textAlign:'center'}}>PACKR</div>
+      <div style={{fontSize:14,color:'var(--tx2)',marginBottom:48,letterSpacing:.5,textAlign:'center'}}>
+        Smart packing for smarter travellers
+      </div>
+
+      <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:24}}>
+        <div style={{display:'flex',background:'var(--sf2)',borderRadius:7,
+          border:'1px solid var(--bd)',padding:2,marginBottom:22}}>
+          {[['signin','Sign In'],['signup','Sign Up']].map(([v,l])=>(
+            <button key={v} onClick={()=>{setMode(v);setError('');setMessage('');}}
+              style={{flex:1,padding:'6px',borderRadius:5,fontSize:13,fontWeight:600,
+                background:mode===v?'var(--sf3)':'transparent',
+                color:mode===v?'var(--tx)':'var(--tx2)'}}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,
+            textTransform:'uppercase',letterSpacing:.7}}>Email</div>
+          <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&handle()} autoFocus
+            style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+              borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
+        </div>
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,
+            textTransform:'uppercase',letterSpacing:.7}}>Password</div>
+          <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&handle()}
+            style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+              borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
+        </div>
+
+        {error&&<div style={{color:'var(--rd)',fontSize:12,marginBottom:14,padding:'8px 10px',
+          background:'rgba(240,82,82,.08)',borderRadius:6,border:'1px solid rgba(240,82,82,.2)'}}>
+          {error}
+        </div>}
+        {message&&<div style={{color:'var(--gn)',fontSize:12,marginBottom:14,padding:'8px 10px',
+          background:'rgba(63,214,138,.08)',borderRadius:6,border:'1px solid rgba(63,214,138,.2)'}}>
+          {message}
+        </div>}
+
+        <button onClick={handle} disabled={loading||!email||!password}
+          style={{width:'100%',padding:'11px',borderRadius:8,background:'var(--am)',
+            color:'#1a0e00',fontWeight:700,fontSize:14,
+            opacity:loading||!email||!password?'.45':'1'}}>
+          {loading?'…':mode==='signin'?'Sign In':'Create Account'}
+        </button>
+      </div>
+    </div>
+  </div>;
+}
+
 /* ── APP ─────────────────────────────────────────────────────────── */
 function App(){
-  const init=loadData();
-  const [trips,setTrips]=useState(init.trips||[]);
+  const [user,setUser]=useState(null);
+  const [authLoading,setAuthLoading]=useState(true);
+  const [dataLoading,setDataLoading]=useState(false);
+  const [rowId,setRowId]=useState(null);
+  const [trips,setTrips]=useState([]);
+  const [templates,setTemplates]=useState([]);
   const [screen,setScreen]=useState('home');
   const [activeId,setActiveId]=useState(null);
   const [view,setView]=useState('board');
   const [drawerItem,setDrawerItem]=useState(null);
   const [pickerLoc,setPickerLoc]=useState(null);
   const [modal,setModal]=useState(null);
+  const loaded=useRef(false);
+  const saveTimer=useRef(null);
 
-  useEffect(()=>{ saveData({trips,activeId}); },[trips,activeId]);
+  useEffect(()=>{
+    sb.auth.getSession().then(({data:{session}})=>{
+      setUser(session?.user??null);
+      setAuthLoading(false);
+    });
+    const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{
+      setUser(session?.user??null);
+    });
+    return()=>subscription.unsubscribe();
+  },[]);
+
+  useEffect(()=>{
+    if(!user){setTrips([]);setTemplates([]);setRowId(null);loaded.current=false;return;}
+    setDataLoading(true);
+    sb.from('packr_trips').select('id,data').eq('user_id',user.id).limit(1)
+      .then(({data:rows})=>{
+        if(rows&&rows.length>0){
+          setRowId(rows[0].id);
+          setTrips(rows[0].data?.trips||[]);
+          setTemplates(rows[0].data?.templates||[]);
+        }
+        setDataLoading(false);
+        loaded.current=true;
+      });
+  },[user]);
+
+  useEffect(()=>{
+    if(!loaded.current||!user)return;
+    if(saveTimer.current)clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(async()=>{
+      const payload={user_id:user.id,data:{trips,templates},updated_at:new Date().toISOString()};
+      if(rowId){
+        await sb.from('packr_trips').update(payload).eq('id',rowId);
+      }else{
+        const{data:row}=await sb.from('packr_trips').insert(payload).select('id').single();
+        if(row)setRowId(row.id);
+      }
+    },1500);
+  },[trips,templates]);
+
+  const signOut=()=>{
+    sb.auth.signOut();
+    setScreen('home');setActiveId(null);setDrawerItem(null);setPickerLoc(null);
+    loaded.current=false;
+  };
 
   const trip=trips.find(t=>t.id===activeId)||null;
   const mut=fn=>setTrips(ts=>ts.map(t=>t.id===activeId?fn(t):t));
 
-  const addTrip=name=>{
-    const t=mkTrip(name);
-    setTrips(ts=>[...ts,t]);
-    setActiveId(t.id);
-    setScreen('trip');
-    setView('board');
-  };
-  const delTrip=id=>{
-    setTrips(ts=>ts.filter(t=>t.id!==id));
-    if(activeId===id){setActiveId(null);setScreen('home');}
-  };
+  const addTrip=name=>{const t=mkTrip(name);setTrips(ts=>[...ts,t]);setActiveId(t.id);setScreen('trip');setView('board');};
+  const delTrip=id=>{setTrips(ts=>ts.filter(t=>t.id!==id));if(activeId===id){setActiveId(null);setScreen('home');}};
   const renameTrip=(id,name)=>setTrips(ts=>ts.map(t=>t.id===id?{...t,name}:t));
   const importTrip=json=>{
-    try{
-      const t=JSON.parse(json);
-      const nt={...t,id:genId(),name:t.name+' (imported)'};
+    try{const t=JSON.parse(json);const nt={...t,id:genId(),name:t.name+' (imported)'};
       setTrips(ts=>[...ts,nt]);setActiveId(nt.id);setScreen('trip');
     }catch{alert('Invalid trip file');}
   };
   const exportTrip=()=>{
     if(!trip)return;
     const b=new Blob([JSON.stringify(trip,null,2)],{type:'application/json'});
-    const u=URL.createObjectURL(b);
-    const a=document.createElement('a');
+    const u=URL.createObjectURL(b);const a=document.createElement('a');
     a.href=u;a.download=`${trip.name.replace(/\s+/g,'-')}-packing.json`;a.click();
     URL.revokeObjectURL(u);
   };
 
   const addLoc=name=>mut(t=>({...t,locations:[...t.locations,
-    {id:genId(),name,color:LOC_COLORS[t.locations.length%LOC_COLORS.length]}]}));
+    {id:genId(),name,color:LOC_COLORS[t.locations.length%LOC_COLORS.length],bagWeight:0}]}));
   const delLoc=id=>{
     if(window.confirm('Delete this location and all its items?'))
       mut(t=>({...t,locations:t.locations.filter(l=>l.id!==id),
         assignments:t.assignments.filter(a=>a.locationId!==id)}));
   };
   const renameLoc=(id,name)=>mut(t=>({...t,locations:t.locations.map(l=>l.id===id?{...l,name}:l)}));
-
   const renameItem=(id,name)=>mut(t=>({...t,items:t.items.map(i=>i.id===id?{...i,name}:i)}));
-  const delItem=id=>mut(t=>({...t,
-    items:t.items.filter(i=>i.id!==id),
-    assignments:t.assignments.filter(a=>a.itemId!==id)}));
+  const setItemWeight=(id,weight)=>mut(t=>({...t,items:t.items.map(i=>i.id===id?{...i,weight}:i)}));
+  const setLocBagWeight=(id,bagWeight)=>mut(t=>({...t,locations:t.locations.map(l=>l.id===id?{...l,bagWeight}:l)}));
+  const delItem=id=>mut(t=>({...t,items:t.items.filter(i=>i.id!==id),assignments:t.assignments.filter(a=>a.itemId!==id)}));
+
+  // Templates
+  const saveTemplate=(name)=>{
+    if(!trip)return;
+    const assignments=trip.assignments.map(a=>{
+      const item=trip.items.find(i=>i.id===a.itemId);
+      const loc=trip.locations.find(l=>l.id===a.locationId);
+      return item&&loc?{itemName:item.name,itemCategory:item.category,itemWeight:item.weight??200,
+        locationName:loc.name,quantity:a.quantity}:null;
+    }).filter(Boolean);
+    setTemplates(ts=>[...ts,{id:genId(),name,createdAt:Date.now(),assignments}]);
+  };
+  const delTemplate=id=>setTemplates(ts=>ts.filter(t=>t.id!==id));
+  const applyTemplate=(templateId)=>{
+    const tpl=templates.find(t=>t.id===templateId);
+    if(!tpl||!trip)return;
+    mut(t=>{
+      let{items,locations,assignments}=t;
+      tpl.assignments.forEach(({itemName,itemCategory,itemWeight,locationName,quantity})=>{
+        const loc=locations.find(l=>l.name.toLowerCase()===locationName.toLowerCase());
+        if(!loc)return;
+        let item=items.find(i=>i.name.toLowerCase()===itemName.toLowerCase());
+        if(!item){item={id:genId(),name:itemName,category:itemCategory,weight:itemWeight};items=[...items,item];}
+        const exists=assignments.find(a=>a.itemId===item.id&&a.locationId===loc.id);
+        if(!exists)assignments=[...assignments,{id:genId(),itemId:item.id,locationId:loc.id,quantity,packed:false}];
+      });
+      return{...t,items,assignments};
+    });
+  };
 
   const setAssign=(itemId,locationId,quantity)=>mut(t=>{
     if(quantity<=0)return{...t,assignments:t.assignments.filter(a=>!(a.itemId===itemId&&a.locationId===locationId))};
     const ex=t.assignments.find(a=>a.itemId===itemId&&a.locationId===locationId);
-    if(ex)return{...t,assignments:t.assignments.map(a=>
-      a.itemId===itemId&&a.locationId===locationId?{...a,quantity}:a)};
+    if(ex)return{...t,assignments:t.assignments.map(a=>a.itemId===itemId&&a.locationId===locationId?{...a,quantity}:a)};
     return{...t,assignments:[...t.assignments,{id:genId(),itemId,locationId,quantity,packed:false}]};
   });
   const togPacked=(itemId,locationId)=>mut(t=>({...t,
-    assignments:t.assignments.map(a=>
-      a.itemId===itemId&&a.locationId===locationId?{...a,packed:!a.packed}:a)}));
+    assignments:t.assignments.map(a=>a.itemId===itemId&&a.locationId===locationId?{...a,packed:!a.packed}:a)}));
 
   const goHome=()=>{setScreen('home');setDrawerItem(null);setPickerLoc(null);};
   const openTrip=id=>{setActiveId(id);setScreen('trip');setDrawerItem(null);setPickerLoc(null);setView('board');};
-
   const activeItem=trip?.items.find(i=>i.id===drawerItem);
   const pickerLocObj=trip?.locations.find(l=>l.id===pickerLoc);
+
+  if(authLoading)return <LoadingScreen/>;
+  if(!user)return <div style={{display:'flex',flexDirection:'column',height:'100vh',background:'var(--bg)'}}><AuthScreen/></div>;
+  if(dataLoading)return <LoadingScreen message="Loading your trips…"/>;
 
   return <div style={{display:'flex',flexDirection:'column',height:'100vh',background:'var(--bg)'}}>
 
     {screen==='home'&&<>
       <div style={{display:'flex',alignItems:'center',padding:'0 20px',height:54,
         background:'var(--sf)',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
-        <div className="bb" style={{fontSize:24,color:'var(--am)',letterSpacing:3}}>PACKR</div>
+        <div className="bb" style={{fontSize:24,color:'var(--am)',letterSpacing:3,flex:1}}>PACKR</div>
+        <DisplayName user={user} onUpdate={u=>setUser(u)}/>
+        <button onClick={signOut} style={{fontSize:12,color:'var(--tx3)',padding:'5px 10px',
+          borderRadius:6,border:'1px solid var(--bd)',background:'var(--sf2)',marginLeft:10}}>Sign out</button>
       </div>
-      <HomeScreen trips={trips} onCreate={addTrip} onSelect={openTrip}
-        onDelete={delTrip} onRename={renameTrip} onImport={importTrip}/>
+      <HomeScreen trips={trips} templates={templates} onCreate={addTrip} onSelect={openTrip}
+        onDelete={delTrip} onRename={renameTrip} onImport={importTrip}
+        onDeleteTemplate={delTemplate}
+        onApplyTemplate={()=>alert('Open a trip first, then use "⚡ Apply Template" in the header.')}/>
     </>}
 
     {screen==='trip'&&trip&&<>
       <TripHeader trip={trip} onHome={goHome}
         onRename={name=>renameTrip(activeId,name)}
         onExport={exportTrip} onImport={importTrip}
+        onSignOut={signOut} user={user} onUpdateUser={u=>setUser(u)}
+        onSaveTemplate={()=>setModal({type:'save-template'})}
+        onApplyTemplate={()=>setModal({type:'apply-template'})}
         view={view} onView={setView}/>
       {view==='board'
         ?<Board trip={trip}
@@ -976,6 +1419,7 @@ function App(){
             onOpen={id=>setDrawerItem(id)}
             onAddLoc={()=>setModal({type:'add-loc'})}
             onRenameLoc={id=>setModal({type:'rename-loc',id})}
+            onSetBagWeight={id=>setModal({type:'set-bag-weight',id})}
             onDelLoc={delLoc}/>
         :<Summary trip={trip}/>
       }
@@ -986,6 +1430,7 @@ function App(){
         onQty={(locId,qty)=>setAssign(activeItem.id,locId,qty)}
         onToggle={locId=>togPacked(activeItem.id,locId)}
         onRename={name=>renameItem(activeItem.id,name)}
+        onSetWeight={w=>setItemWeight(activeItem.id,w)}
         onDel={()=>{delItem(activeItem.id);setDrawerItem(null);}}/>}
 
       {pickerLocObj&&<Picker items={trip.items} assignments={trip.assignments}
@@ -995,7 +1440,7 @@ function App(){
         onCreateAdd={name=>{
           const nid=genId();
           mut(t=>({...t,
-            items:[...t.items,{id:nid,name,category:'Custom'}],
+            items:[...t.items,{id:nid,name,category:'Custom',weight:200}],
             assignments:[...t.assignments,{id:genId(),itemId:nid,locationId:pickerLoc,quantity:1,packed:false}],
           }));
           setPickerLoc(null);setDrawerItem(nid);
@@ -1008,6 +1453,16 @@ function App(){
         <NameInput defVal={trip.locations.find(l=>l.id===modal.id)?.name||''}
           onSubmit={n=>{renameLoc(modal.id,n);setModal(null);}}/>
       </Modal>}
+      {modal?.type==='set-bag-weight'&&trip&&(()=>{
+        const loc=trip.locations.find(l=>l.id===modal.id);
+        return <BagWeightModal loc={loc} onClose={()=>setModal(null)}
+          onSave={w=>{setLocBagWeight(modal.id,w);setModal(null);}}/>;
+      })()}
+      {modal?.type==='save-template'&&trip&&
+        <SaveTemplateModal trip={trip} onClose={()=>setModal(null)} onSave={saveTemplate}/>}
+      {modal?.type==='apply-template'&&trip&&
+        <ApplyTemplateModal templates={templates} trip={trip}
+          onClose={()=>setModal(null)} onApply={applyTemplate}/>}
     </>}
   </div>;
 }
