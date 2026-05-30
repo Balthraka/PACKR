@@ -56,6 +56,7 @@ input,textarea{font-family:inherit;font-size:14px}
 /* desktop-only header buttons */
 .hdr-desktop{display:flex;align-items:center;gap:8px;}
 .hdr-mobile-menu{display:none;}
+.sort-hint{display:inline !important;}
 
 @media(max-width:768px){
   .board-container{
@@ -75,6 +76,7 @@ input,textarea{font-family:inherit;font-size:14px}
   }
   .hdr-desktop{display:none !important;}
   .hdr-mobile-menu{display:flex !important;align-items:center;gap:8px;}
+  .sort-hint{display:none !important;}
   .board-add-loc{
     min-width:calc(100vw - 32px) !important;
     scroll-snap-align:start;
@@ -126,10 +128,10 @@ const LOC_COLORS = ['#F59E0B','#10B981','#3B82F6','#A855F7','#EF4444','#06B6D4',
 
 // bagWeight = tare weight of the bag itself in grams
 const DEFAULT_LOCS = [
-  {id:'l1',name:'Wearing',       color:'#F59E0B', bagWeight:0},
-  {id:'l2',name:'Personal Item', color:'#10B981', bagWeight:400},
-  {id:'l3',name:'Carry-on',      color:'#3B82F6', bagWeight:1800},
-  {id:'l4',name:'Checked Bag',   color:'#A855F7', bagWeight:3000},
+  {name:'Wearing',       color:'#F59E0B', bagWeight:0,    weightLimit:null},
+  {name:'Personal Item', color:'#10B981', bagWeight:400,  weightLimit:7000},
+  {name:'Carry-on',      color:'#3B82F6', bagWeight:1800, weightLimit:7000},
+  {name:'Checked Bag',   color:'#A855F7', bagWeight:3000, weightLimit:23000},
 ];
 
 // [name, category, weightGrams]
@@ -259,6 +261,11 @@ const fmtW = g => {
   return `${kg % 1 === 0 ? kg.toFixed(0) : kg.toFixed(1)}kg`;
 };
 
+// Canonical category list derived from master items + Other
+const CATEGORIES=[...new Set(ITEM_TPLS.map(([,c])=>c)),'Other'];
+// Normalise legacy 'Custom' to 'Other' for display (stored value unchanged)
+const normCat=c=>(c==='Custom'?'Other':c)||'Other';
+
 const mkTrip = name => ({
   id:genId(), name, createdAt:Date.now(),
   locations: DEFAULT_LOCS.map(l=>({...l,id:genId()})),
@@ -342,7 +349,7 @@ function Qty({value,onChange}){
       style={{width:24,height:24,borderRadius:5,background:'var(--sf3)',
         fontSize:17,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
     <span style={{width:22,textAlign:'center',fontSize:13,fontWeight:600}}>{value}</span>
-    <button onClick={()=>onChange(Math.min(20,value+1))}
+    <button onClick={()=>onChange(Math.min(30,value+1))}
       style={{width:24,height:24,borderRadius:5,background:'var(--sf3)',
         fontSize:17,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
   </div>;
@@ -361,7 +368,7 @@ function PackBox({packed,onChange}){
 }
 
 /* ── ITEM CARD (board) ───────────────────────────────────────────── */
-const isTouchPrimary=()=>window.matchMedia('(hover:none)').matches;
+const IS_TOUCH_PRIMARY=window.matchMedia('(hover:none)').matches;
 
 function ItemCard({item,a,locColor,onToggle,onQty,onOpen,onDragStart,onDragEnter,onDragEnd,showInsertLine,sort='personal'}){
   const canDrag=!a.packed&&sort==='personal';
@@ -420,7 +427,7 @@ function ItemCard({item,a,locColor,onToggle,onQty,onOpen,onDragStart,onDragEnter
         borderRadius:8,padding:'9px 11px',display:'flex',alignItems:'center',gap:8,
         transition:'border-color .15s',opacity:a.packed?.58:1,marginBottom:6}}>
       {canDrag&&<span
-        onTouchStart={isTouchPrimary()?onHandleTouchStart:undefined}
+        onTouchStart={IS_TOUCH_PRIMARY?onHandleTouchStart:undefined}
         style={{color:'var(--tx3)',fontSize:16,flexShrink:0,
           lineHeight:1,padding:'4px 4px',userSelect:'none',
           touchAction:'none',cursor:'grab'}}>
@@ -437,7 +444,7 @@ function ItemCard({item,a,locColor,onToggle,onQty,onOpen,onDragStart,onDragEnter
 }
 
 /* ── LOCATION COLUMN ─────────────────────────────────────────────── */
-function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSetBagWeight,onDel,onReorder,sort='personal'}){
+function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSetBagWeight,onSetWeightLimit,onDel,onReorder,onPackAll,sort='personal'}){
   const [menu,setMenu]=useState(false);
   const [dragId,setDragId]=useState(null);
   const [overId,setOverId]=useState(null);
@@ -480,6 +487,9 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSe
   const bagW = loc.bagWeight ?? 0;
   const contentsW = la.reduce((s,a)=>{ const item=items.find(i=>i.id===a.itemId); return s+(item?.weight??200)*a.quantity; },0);
   const totalW = bagW + contentsW;
+  const wLimit = loc.weightLimit ?? null;
+  const overLimit = wLimit && totalW > wLimit;
+  const nearLimit = wLimit && !overLimit && totalW > wLimit * 0.9;
 
   const startDrag=id=>{setDragId(id);dragIdRef.current=id;};
   const enterDrag=id=>{setOverId(id);overIdRef.current=id;};
@@ -499,7 +509,11 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSe
         <div className="bb" style={{fontSize:18,color:loc.color,letterSpacing:2}}>{loc.name}</div>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
           <div style={{textAlign:'right'}}>
-            <div style={{fontSize:14,fontWeight:700,color:'var(--tx)',fontFamily:'Outfit,sans-serif'}}>~{fmtW(totalW)}</div>
+            <div style={{fontSize:14,fontWeight:700,fontFamily:'Outfit,sans-serif',
+              color:overLimit?'var(--rd)':nearLimit?'var(--am)':'var(--tx)'}}>
+              ~{fmtW(totalW)}{wLimit?` / ${fmtW(wLimit)}`:''}
+              {overLimit&&<span style={{fontSize:10,marginLeft:4}}>⚠</span>}
+            </div>
             {bagW>0&&<div style={{fontSize:9,color:'var(--tx3)',lineHeight:1}}>bag: {fmtW(bagW)}</div>}
           </div>
           <div style={{position:'relative'}} ref={mRef}>
@@ -513,6 +527,10 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSe
                 style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>Rename</button>
               <button onClick={()=>{onSetBagWeight();setMenu(false);}}
                 style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>Set bag weight</button>
+              <button onClick={()=>{onSetWeightLimit();setMenu(false);}}
+                style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>
+                {wLimit?`Weight limit: ${fmtW(wLimit)}`:'Set weight limit'}
+              </button>
               <button onClick={()=>{confirm(`Delete "${loc.name}" and all its items?`,onDel);setMenu(false);}}
                 style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--rd)',textAlign:'left'}}>Delete</button>
             </div>}
@@ -560,8 +578,14 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSe
       </div>
     </div>
 
-    <div style={{padding:8,borderTop:'1px solid var(--bd)',flexShrink:0}}>
-      <button onClick={onAdd} style={{width:'100%',padding:'7px',borderRadius:7,
+    <div style={{padding:8,borderTop:'1px solid var(--bd)',flexShrink:0,display:'flex',gap:6}}>
+      {unpackedRows.length>0&&<button onClick={onPackAll}
+        style={{flex:1,padding:'7px',borderRadius:7,background:'var(--sf2)',
+          border:'1px solid var(--gn)',color:'var(--gn)',fontSize:12,fontWeight:600,
+          display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>
+        ✓ Pack all
+      </button>}
+      <button onClick={onAdd} style={{flex:1,padding:'7px',borderRadius:7,
         background:'var(--sf2)',border:'1px dashed var(--bd)',
         color:'var(--tx3)',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
         <span style={{fontSize:16}}>+</span> Add item
@@ -571,9 +595,10 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSe
 }
 
 /* ── ITEM DRAWER ─────────────────────────────────────────────────── */
-function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,onSetWeight,onDel}){
+function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,onSetWeight,onSetCategory,onDel}){
   const [editVal,setEditVal]=useState(null);
   const [editingWeight,setEditingWeight]=useState(false);
+  const [editingCat,setEditingCat]=useState(false);
   const [weightVal,setWeightVal]=useState('');
   const wRef=useRef();
   const{ask:confirm,el:confirmEl}=useConfirm();
@@ -590,6 +615,8 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
   };
   useEffect(()=>{if(editingWeight)wRef.current?.focus();},[editingWeight]);
 
+  const displayCat=normCat(item.category);
+
   return <>
     {confirmEl}
     <Veil onClick={onClose} alpha={.38}/>
@@ -598,9 +625,15 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
       <div style={{padding:'18px 18px 14px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
           <div style={{flex:1,marginRight:12}}>
-            <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,marginBottom:5}}>
-              {item.category}
-            </div>
+            {/* Category label — tap to open editor in body */}
+            <button onClick={()=>{setEditingCat(c=>!c);setEditVal(null);setEditingWeight(false);}}
+              style={{fontSize:10,color:editingCat?'var(--am)':'var(--tx3)',textTransform:'uppercase',
+                letterSpacing:1,marginBottom:5,background:'none',padding:0,
+                display:'flex',alignItems:'center',gap:4}}
+              onMouseEnter={e=>e.currentTarget.style.color='var(--am)'}
+              onMouseLeave={e=>{if(!editingCat)e.currentTarget.style.color='var(--tx3)';}}>
+              {displayCat} ✎
+            </button>
             {editVal!==null
               ?<input value={editVal} onChange={e=>setEditVal(e.target.value)}
                   onKeyDown={e=>{if(e.key==='Enter')saveRename();if(e.key==='Escape')setEditVal(null);}}
@@ -653,6 +686,19 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
       </div>
 
       <div style={{flex:1,overflowY:'auto',padding:16,paddingBottom:'calc(16px + env(safe-area-inset-bottom))'}}>
+
+        {/* Category editor — lives in scroll body so pills can scroll horizontally */}
+        {editingCat&&<div style={{marginBottom:16,padding:'12px 14px',
+          background:'var(--sf2)',borderRadius:9,border:'1px solid var(--am)'}}>
+          <div style={{fontSize:10,color:'var(--am)',textTransform:'uppercase',
+            letterSpacing:1,marginBottom:8}}>Choose category</div>
+          <CategoryPills value={displayCat} onChange={c=>{onSetCategory(c);setEditingCat(false);}}/>
+          <button onClick={()=>setEditingCat(false)}
+            style={{fontSize:11,color:'var(--tx3)',marginTop:8,padding:0,background:'none'}}>
+            Cancel
+          </button>
+        </div>}
+
         <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>
           Location Assignments
         </div>
@@ -708,17 +754,40 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
   </>;
 }
 
-/* ── ITEM PICKER ─────────────────────────────────────────────────── */
 /* ── CATEGORY FILTER ─────────────────────────────────────────────── */
 function CategoryFilter({categories,selected,onSelect}){
   return <div style={{display:'flex',gap:5,overflowX:'auto',paddingBottom:4,marginBottom:10,
-    scrollbarWidth:'none',msOverflowStyle:'none'}}>
+    scrollbarWidth:'none',msOverflowStyle:'none',
+    touchAction:'pan-x',overscrollBehaviorX:'contain',WebkitOverflowScrolling:'touch',
+    alignItems:'center'}}>
     {['All',...categories].map(cat=>(
       <button key={cat} onClick={()=>onSelect(cat==='All'?null:cat)}
         style={{padding:'4px 11px',borderRadius:20,fontSize:11,fontWeight:600,
           flexShrink:0,border:'none',transition:'all .12s',
           background:selected===(cat==='All'?null:cat)?'var(--am)':'var(--sf2)',
           color:selected===(cat==='All'?null:cat)?'#1a0e00':'var(--tx2)'}}>
+        {cat}
+      </button>
+    ))}
+    {selected&&<button onClick={()=>onSelect(null)}
+      style={{flexShrink:0,fontSize:10,color:'var(--tx3)',padding:'4px 8px',
+        borderRadius:20,background:'var(--sf3)',border:'none',whiteSpace:'nowrap'}}>
+      ✕ Clear
+    </button>}
+  </div>;
+}
+
+function CategoryPills({value,onChange}){
+  return <div style={{display:'flex',gap:5,overflowX:'auto',paddingBottom:4,
+    scrollbarWidth:'none',msOverflowStyle:'none',
+    touchAction:'pan-x',overscrollBehaviorX:'contain',WebkitOverflowScrolling:'touch'}}>
+    {CATEGORIES.map(cat=>(
+      <button key={cat} onClick={()=>onChange(cat)}
+        style={{padding:'4px 11px',borderRadius:20,fontSize:11,fontWeight:600,
+          flexShrink:0,border:`1px solid ${normCat(value)===cat?'var(--am)':'transparent'}`,
+          background:normCat(value)===cat?'var(--am)':'var(--sf2)',
+          color:normCat(value)===cat?'#1a0e00':'var(--tx2)',
+          transition:'all .12s'}}>
         {cat}
       </button>
     ))}
@@ -729,6 +798,7 @@ function Picker({items,assignments,locId,loc,onClose,onSelect,onCreateAdd}){
   const [q,setQ]=useState('');
   const [cat,setCat]=useState(null);
   const [name,setName]=useState('');
+  const [newCat,setNewCat]=useState('Other');
   const [tab,setTab]=useState('pick');
   const qRef=useRef();
   useEffect(()=>{ qRef.current?.focus(); },[]);
@@ -748,16 +818,19 @@ function Picker({items,assignments,locId,loc,onClose,onSelect,onCreateAdd}){
     .map(([n,c,w])=>({id:'__tpl__'+n,name:n,category:c,weight:w,_fromMaster:true}));
   const allItems=[...items,...masterExtras];
 
-  // All available categories (from unfiltered pool)
+  // All available categories (from unfiltered pool) — normalise Custom→Other
   const available=allItems.filter(i=>!takenInCol.has(i.name.toLowerCase()));
-  const categories=[...new Set(available.map(i=>i.category))].sort();
+  const categories=[...new Set(available.map(i=>normCat(i.category)))].sort();
 
   // Apply search + category filter together
   const filtered=available.filter(i=>
-    (!cat||i.category===cat)&&
+    (!cat||normCat(i.category)===cat)&&
     i.name.toLowerCase().includes(q.toLowerCase())
   );
-  const grouped=filtered.reduce((acc,i)=>{(acc[i.category]=acc[i.category]||[]).push(i);return acc;},{});
+  const grouped=filtered.reduce((acc,i)=>{
+    const c=normCat(i.category);
+    (acc[c]=acc[c]||[]).push(i);return acc;
+  },{});
 
   const handleSelect=item=>{
     if(item._fromMaster){
@@ -811,17 +884,19 @@ function Picker({items,assignments,locId,loc,onClose,onSelect,onCreateAdd}){
     </>}
 
     {tab==='new'&&<div>
-      <div style={{fontSize:12,color:'var(--tx2)',marginBottom:8}}>
+      <div style={{fontSize:12,color:'var(--tx2)',marginBottom:10}}>
         Create a new item and add it to <b style={{color:'var(--tx)'}}>{loc.name}</b>:
       </div>
       <input value={name} onChange={e=>setName(e.target.value)} autoFocus
-        onKeyDown={e=>e.key==='Enter'&&name.trim()&&onCreateAdd(name.trim())}
+        onKeyDown={e=>e.key==='Enter'&&name.trim()&&onCreateAdd(name.trim(),newCat)}
         placeholder="E.g. Silk Pyjamas…"
         style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
-          borderRadius:7,padding:'9px 12px',color:'var(--tx)',outline:'none',marginBottom:12}}/>
-      <button onClick={()=>name.trim()&&onCreateAdd(name.trim())} disabled={!name.trim()}
+          borderRadius:7,padding:'9px 12px',color:'var(--tx)',outline:'none',marginBottom:10}}/>
+      <div style={{fontSize:11,color:'var(--tx3)',marginBottom:6,textTransform:'uppercase',letterSpacing:.7}}>Category</div>
+      <CategoryPills value={newCat} onChange={setNewCat}/>
+      <button onClick={()=>name.trim()&&onCreateAdd(name.trim(),newCat)} disabled={!name.trim()}
         style={{width:'100%',padding:'10px',borderRadius:7,background:'var(--am)',
-          color:'#1a0e00',fontWeight:700,fontSize:13,opacity:name.trim()?1:.45}}>
+          color:'#1a0e00',fontWeight:700,fontSize:13,marginTop:12,opacity:name.trim()?1:.45}}>
         Create & Add
       </button>
     </div>}
@@ -915,8 +990,7 @@ function ListView({groups,items,showWeight,sort}){
         </thead>
         <tbody>
           {sortedRows.map(a=>{
-            const itemObj=items.find(i=>i.id===a.itemId);
-            const rowW=(itemObj?.weight??200)*a.quantity;
+            const rowW=(a.item?.weight??200)*a.quantity;
             return <tr key={a.id} style={{borderTop:'1px solid var(--bd)',background:a.packed?'rgba(63,214,138,.06)':'transparent'}}>
               <td style={{padding:'8px 0 8px 16px',textAlign:'center'}}><StatusDot packed={a.packed}/></td>
               <td style={{padding:'8px 16px',fontSize:13,color:'var(--tx)'}}>{a.item.name}</td>
@@ -986,7 +1060,8 @@ function GridSummary({trip,showWeight,sort}){
   if(!assignedItems.length) return <Empty/>;
 
   const byCategory=assignedItems.reduce((acc,item)=>{
-    (acc[item.category]=acc[item.category]||[]).push(item);return acc;
+    const cat=normCat(item.category);
+    (acc[cat]=acc[cat]||[]).push(item);return acc;
   },{});
   // Sort within each category group
   Object.keys(byCategory).forEach(cat=>{
@@ -1091,7 +1166,7 @@ function Summary({trip,onResetPacked}){
     const bagW=loc.bagWeight??0;
     const contW=trip.assignments
       .filter(a=>a.locationId===loc.id)
-      .reduce((s,a)=>{const it=trip.items.find(i=>i.id===a.itemId);return s+(it?.weight??200)*a.quantity;},0);
+      .reduce((s,a)=>{const it=trip.items.find(i=>i.id===a.itemId);return it?s+(it.weight??200)*a.quantity:s;},0);
     return tot+bagW+contW;
   },0);
 
@@ -1183,6 +1258,51 @@ function Summary({trip,onResetPacked}){
   </div>;
 }
 
+/* ── WEIGHT LIMIT MODAL ──────────────────────────────────────────── */
+function WeightLimitModal({loc,onClose,onSave}){
+  const [val,setVal]=useState(String(loc?.weightLimit??''));
+  const iRef=useRef();
+  useEffect(()=>{iRef.current?.focus();iRef.current?.select();},[]);
+  const save=()=>{
+    const v=parseInt(val);
+    onSave(!isNaN(v)&&v>0?v:null); // null = no limit
+  };
+  const presets=[
+    ['No limit',null],
+    ['7kg — Carry-On (Standard)',7000],
+    ['10kg — Carry-On (Generous)',10000],
+    ['20kg — Checked (Budget)',20000],
+    ['23kg — Checked (Standard)',23000],
+    ['25kg — Checked (Generous)',25000],
+    ['32kg — Checked (Maximum)',32000],
+  ];
+  return <Modal title={`Weight Limit — ${loc?.name}`} onClose={onClose}>
+    <div style={{fontSize:12,color:'var(--tx2)',marginBottom:10}}>
+      Set a maximum weight for this bag. PACKR will warn you when you exceed it. Leave blank for no limit.
+    </div>
+    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:14}}>
+      <input ref={iRef} value={val} onChange={e=>setVal(e.target.value.replace(/\D/g,''))}
+        onKeyDown={e=>e.key==='Enter'&&save()} placeholder="e.g. 10000"
+        style={{flex:1,background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:7,
+          padding:'9px 12px',color:'var(--tx)',outline:'none',fontSize:16,fontWeight:700,textAlign:'center'}}/>
+      <span style={{fontSize:14,color:'var(--tx2)',flexShrink:0}}>grams</span>
+    </div>
+    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
+      {presets.map(([l,v])=>(
+        <button key={l} onClick={()=>setVal(v===null?'':String(v))}
+          style={{padding:'4px 10px',borderRadius:5,fontSize:11,fontWeight:600,
+            background:val===(v===null?'':String(v))?'var(--am)':'var(--sf2)',
+            color:val===(v===null?'':String(v))?'#1a0e00':'var(--tx2)',
+            border:`1px solid ${val===(v===null?'':String(v))?'var(--am)':'var(--bd)'}`}}>
+          {l}
+        </button>
+      ))}
+    </div>
+    <button onClick={save} style={{width:'100%',padding:'10px',borderRadius:7,
+      background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:13}}>Save</button>
+  </Modal>;
+}
+
 /* ── BAG WEIGHT MODAL ────────────────────────────────────────────── */
 function BagWeightModal({loc,onClose,onSave}){
   const [val,setVal]=useState(String(loc?.bagWeight??0));
@@ -1217,7 +1337,7 @@ function BagWeightModal({loc,onClose,onSave}){
 }
 
 /* ── BOARD ───────────────────────────────────────────────────────── */
-function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onSetBagWeight,onDelLoc,onReorder}){
+function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onSetBagWeight,onSetWeightLimit,onDelLoc,onReorder,onPackAll}){
   const [activeIdx,setActiveIdx]=useState(0);
   const [sort,setSort]=useState('personal');
   const scrollRef=useRef();
@@ -1231,11 +1351,12 @@ function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onSetBagWe
 
   return <div style={{flex:1,display:'flex',flexDirection:'column',minHeight:0}}>
     {/* Sort bar */}
-    <div className="np" style={{display:'flex',alignItems:'center',justifyContent:'flex-end',
-      padding:'6px 16px',borderBottom:'1px solid var(--bd)',flexShrink:0,gap:8}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',
+      padding:'5px 12px',borderBottom:'1px solid var(--bd)',flexShrink:0,gap:8}} className="np">
       <SortControl value={sort} onChange={setSort}/>
-      {sort!=='personal'&&<span style={{fontSize:11,color:'var(--tx3)'}}>
-        Drag to reorder only available in Personal order
+      {sort!=='personal'&&<span style={{fontSize:11,color:'var(--tx3)',
+        display:'none'}} className="sort-hint">
+        Drag unavailable when sorted
       </span>}
     </div>
     <div ref={scrollRef} className="board-container" onScroll={onScroll}>
@@ -1254,8 +1375,10 @@ function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onSetBagWe
           onAdd={()=>onAdd(loc.id)} onToggle={onToggle} onQty={onQty} onOpen={onOpen}
           onRename={()=>onRenameLoc(loc.id)}
           onSetBagWeight={()=>onSetBagWeight(loc.id)}
+          onSetWeightLimit={()=>onSetWeightLimit(loc.id)}
           onDel={()=>onDelLoc(loc.id)}
           onReorder={onReorder}
+          onPackAll={()=>onPackAll(loc.id)}
           sort={sort}/>
       ))}
       <button onClick={onAddLoc} className="board-add-loc"
@@ -1458,6 +1581,7 @@ function TemplateItemPicker({locName,takenNames,onClose,onAdd}){
   const [cat,setCat]=useState(null);
   const [tab,setTab]=useState('pick');
   const [customName,setCustomName]=useState('');
+  const [newCat,setNewCat]=useState('Other');
   const [lastAdded,setLastAdded]=useState('');
   const qRef=useRef();
   const cRef=useRef();
@@ -1482,7 +1606,7 @@ function TemplateItemPicker({locName,takenNames,onClose,onAdd}){
   };
   const pickCustom=()=>{
     if(!customName.trim())return;
-    onAdd({itemName:customName.trim(),itemCategory:'Custom',itemWeight:200,locationName:locName,quantity:1});
+    onAdd({itemName:customName.trim(),itemCategory:newCat,itemWeight:200,locationName:locName,quantity:1});
     setLastAdded(customName.trim());
     setCustomName('');
   };
@@ -1538,17 +1662,19 @@ function TemplateItemPicker({locName,takenNames,onClose,onAdd}){
     </>}
 
     {tab==='custom'&&<div>
-      <div style={{fontSize:12,color:'var(--tx2)',marginBottom:8}}>
-        Add a custom item to <b style={{color:'var(--tx)'}}>{locName}</b>. Weight defaults to 200g — you can edit it in the trip.
+      <div style={{fontSize:12,color:'var(--tx2)',marginBottom:10}}>
+        Add a custom item to <b style={{color:'var(--tx)'}}>{locName}</b>. Weight defaults to 200g — edit it after adding.
       </div>
       <input ref={cRef} value={customName} onChange={e=>setCustomName(e.target.value)}
         onKeyDown={e=>e.key==='Enter'&&pickCustom()}
         placeholder="E.g. Silk Pyjamas…"
         style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
-          borderRadius:7,padding:'9px 12px',color:'var(--tx)',outline:'none',marginBottom:12}}/>
+          borderRadius:7,padding:'9px 12px',color:'var(--tx)',outline:'none',marginBottom:10}}/>
+      <div style={{fontSize:11,color:'var(--tx3)',marginBottom:6,textTransform:'uppercase',letterSpacing:.7}}>Category</div>
+      <CategoryPills value={newCat} onChange={setNewCat}/>
       <button onClick={pickCustom} disabled={!customName.trim()}
         style={{width:'100%',padding:'10px',borderRadius:7,background:'var(--am)',
-          color:'#1a0e00',fontWeight:700,fontSize:13,opacity:customName.trim()?1:.45}}>
+          color:'#1a0e00',fontWeight:700,fontSize:13,marginTop:12,opacity:customName.trim()?1:.45}}>
         Add
       </button>
     </div>}
@@ -2255,8 +2381,8 @@ function App(){
     const snapshot=JSON.stringify({trips,templates});
     if(snapshot===lastSaved.current)return;
     if(saveTimer.current)clearTimeout(saveTimer.current);
-    setSaveStatus('saving');
     saveTimer.current=setTimeout(async()=>{
+      setSaveStatus('saving');
       try{
         const payload={user_id:user.id,data:{trips,templates},updated_at:new Date().toISOString()};
         if(rowId){
@@ -2317,9 +2443,13 @@ function App(){
   const renameLoc=(id,name)=>mut(t=>({...t,locations:t.locations.map(l=>l.id===id?{...l,name}:l)}));
   const renameItem=(id,name)=>mut(t=>({...t,items:t.items.map(i=>i.id===id?{...i,name}:i)}));
   const setItemWeight=(id,weight)=>mut(t=>({...t,items:t.items.map(i=>i.id===id?{...i,weight}:i)}));
+  const setItemCategory=(id,category)=>mut(t=>({...t,items:t.items.map(i=>i.id===id?{...i,category}:i)}));
   const setLocBagWeight=(id,bagWeight)=>mut(t=>({...t,locations:t.locations.map(l=>l.id===id?{...l,bagWeight}:l)}));
+  const setLocWeightLimit=(id,weightLimit)=>mut(t=>({...t,locations:t.locations.map(l=>l.id===id?{...l,weightLimit}:l)}));
   const delItem=id=>mut(t=>({...t,items:t.items.filter(i=>i.id!==id),assignments:t.assignments.filter(a=>a.itemId!==id)}));
   const resetPacked=()=>mut(t=>({...t,assignments:t.assignments.map(a=>({...a,packed:false}))}));
+  const packAllInLoc=locId=>mut(t=>({...t,assignments:t.assignments.map(a=>
+    a.locationId===locId?{...a,packed:true}:a)}));
   const reorderAssignment=(locationId,fromId,toId)=>mut(t=>{
     const all=[...t.assignments];
     const fi=all.findIndex(a=>a.id===fromId);
@@ -2347,7 +2477,7 @@ function App(){
     const assignments=trip.assignments.map(a=>{
       const item=trip.items.find(i=>i.id===a.itemId);
       const loc=trip.locations.find(l=>l.id===a.locationId);
-      return item&&loc?{itemName:item.name,itemCategory:item.category,itemWeight:item.weight??200,
+      return item&&loc?{itemName:item.name,itemCategory:normCat(item.category),itemWeight:item.weight??200,
         locationName:loc.name,quantity:a.quantity}:null;
     }).filter(Boolean);
     setTemplates(ts=>[...ts,{id:genId(),name,createdAt:Date.now(),assignments}]);
@@ -2423,12 +2553,13 @@ function App(){
 
     {screen==='home'&&<>
       <div style={{display:'flex',alignItems:'center',padding:'0 16px',height:54,
-        background:'var(--sf)',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
-        <div className="bb" style={{fontSize:24,color:'var(--am)',letterSpacing:3,flex:1}}>PACKR</div>
+        background:'var(--sf)',borderBottom:'1px solid var(--bd)',flexShrink:0,gap:8}}>
+        <div className="bb" style={{fontSize:24,color:'var(--am)',letterSpacing:3,flexShrink:0}}>PACKR</div>
+        <div style={{flex:1,minWidth:0}}/>
         <SaveIndicator status={saveStatus}/>
         <DisplayName user={user} onUpdate={u=>setUser(u)}/>
         <button onClick={signOut} style={{fontSize:12,color:'var(--tx3)',padding:'5px 10px',
-          borderRadius:6,border:'1px solid var(--bd)',background:'var(--sf2)',marginLeft:8,flexShrink:0,whiteSpace:'nowrap'}}>
+          borderRadius:6,border:'1px solid var(--bd)',background:'var(--sf2)',flexShrink:0,whiteSpace:'nowrap'}}>
           Sign out
         </button>
       </div>
@@ -2442,7 +2573,6 @@ function App(){
         onCreateTemplate={createTemplate}
         onCreateTripAndApply={createTripAndApply}
         onApplyTemplateToTrip={(templateId,tripId)=>{
-          setActiveId(tripId);
           applyTemplate(templateId,tripId);
           openTrip(tripId);
         }}/>
@@ -2464,8 +2594,10 @@ function App(){
             onAddLoc={()=>setModal({type:'add-loc'})}
             onRenameLoc={id=>setModal({type:'rename-loc',id})}
             onSetBagWeight={id=>setModal({type:'set-bag-weight',id})}
+            onSetWeightLimit={id=>setModal({type:'set-weight-limit',id})}
             onDelLoc={delLoc}
-            onReorder={reorderAssignment}/>
+            onReorder={reorderAssignment}
+            onPackAll={packAllInLoc}/>
         :<Summary trip={trip} onResetPacked={resetPacked}/>
       }
 
@@ -2476,6 +2608,7 @@ function App(){
         onToggle={locId=>togPacked(activeItem.id,locId)}
         onRename={name=>renameItem(activeItem.id,name)}
         onSetWeight={w=>setItemWeight(activeItem.id,w)}
+        onSetCategory={cat=>setItemCategory(activeItem.id,cat)}
         onDel={()=>{delItem(activeItem.id);setDrawerItem(null);}}/>}
 
       {pickerLocObj&&<Picker items={trip.items} assignments={trip.assignments}
@@ -2485,7 +2618,7 @@ function App(){
         onCreateAdd={(name,category,weight)=>{
           const nid=genId();
           mut(t=>({...t,
-            items:[...t.items,{id:nid,name,category:category||'Custom',weight:weight||200}],
+            items:[...t.items,{id:nid,name,category:category||'Other',weight:weight||200}],
             assignments:[...t.assignments,{id:genId(),itemId:nid,locationId:pickerLoc,quantity:1,packed:false}],
           }));
           setPickerLoc(null);setDrawerItem(nid);
@@ -2502,6 +2635,11 @@ function App(){
         const loc=trip.locations.find(l=>l.id===modal.id);
         return <BagWeightModal loc={loc} onClose={()=>setModal(null)}
           onSave={w=>{setLocBagWeight(modal.id,w);setModal(null);}}/>;
+      })()}
+      {modal?.type==='set-weight-limit'&&trip&&(()=>{
+        const loc=trip.locations.find(l=>l.id===modal.id);
+        return <WeightLimitModal loc={loc} onClose={()=>setModal(null)}
+          onSave={w=>{setLocWeightLimit(modal.id,w);setModal(null);}}/>;
       })()}
       {modal?.type==='save-template'&&trip&&
         <SaveTemplateModal trip={trip} onClose={()=>setModal(null)} onSave={saveTemplate}/>}
