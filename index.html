@@ -361,7 +361,8 @@ function PackBox({packed,onChange}){
 }
 
 /* ── ITEM CARD (board) ───────────────────────────────────────────── */
-function ItemCard({item,a,locColor,onToggle,onQty,onOpen,onDragStart,onDragEnter,onDragEnd,showInsertLine}){
+function ItemCard({item,a,locColor,onToggle,onQty,onOpen,onDragStart,onDragEnter,onDragEnd,showInsertLine,sort='personal'}){
+  const canDrag=!a.packed&&sort==='personal';
 
   const onHandleTouchStart=e=>{
     e.stopPropagation();
@@ -407,19 +408,19 @@ function ItemCard({item,a,locColor,onToggle,onQty,onOpen,onDragStart,onDragEnter
       margin:'2px 6px',flexShrink:0}}/>}
     <div
       data-assignid={a.id}
-      draggable={!a.packed}
-      onDragStart={a.packed?undefined:e=>{
+      draggable={canDrag}
+      onDragStart={canDrag?e=>{
         e.dataTransfer.effectAllowed='move';
         onDragStart(a.id);
-      }}
-      onDragEnter={a.packed?undefined:e=>{e.preventDefault();onDragEnter(a.id);}}
-      onDragOver={e=>e.preventDefault()}
-      onDragEnd={a.packed?undefined:onDragEnd}
+      }:undefined}
+      onDragEnter={canDrag?e=>{e.preventDefault();onDragEnter(a.id);}:undefined}
+      onDragOver={canDrag?e=>e.preventDefault():undefined}
+      onDragEnd={canDrag?onDragEnd:undefined}
       style={{background:a.packed?`${locColor}0c`:'var(--sf2)',
         border:`1px solid ${a.packed?locColor+'38':'var(--bd)'}`,
         borderRadius:8,padding:'9px 11px',display:'flex',alignItems:'center',gap:8,
         transition:'border-color .15s',opacity:a.packed?.58:1,marginBottom:6}}>
-      {!a.packed&&<span
+      {canDrag&&<span
         onTouchStart={onHandleTouchStart}
         style={{color:'var(--tx3)',fontSize:16,flexShrink:0,
           lineHeight:1,padding:'4px 4px',userSelect:'none',
@@ -437,7 +438,7 @@ function ItemCard({item,a,locColor,onToggle,onQty,onOpen,onDragStart,onDragEnter
 }
 
 /* ── LOCATION COLUMN ─────────────────────────────────────────────── */
-function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSetBagWeight,onDel,onReorder}){
+function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSetBagWeight,onDel,onReorder,sort='personal'}){
   const [menu,setMenu]=useState(false);
   const [dragId,setDragId]=useState(null);
   const [overId,setOverId]=useState(null);
@@ -458,7 +459,24 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSe
   const packed=la.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
   const pct=total>0?packed/total:0;
   const done=total>0&&packed===total;
-  const sorted=[...la].sort((a,b)=>(a.packed?1:0)-(b.packed?1:0));
+
+  // Sort within each packed/unpacked group; attach item for sort comparators
+  const withItem=la.map(a=>({...a,item:items.find(i=>i.id===a.itemId)}));
+  const unpackedRows=withItem.filter(a=>!a.packed);
+  const packedRows=withItem.filter(a=>a.packed);
+  const sortedAssign=(rows)=>{
+    if(sort==='personal')return rows;
+    return [...rows].sort((a,b)=>{
+      const na=a.item?.name||'';const nb=b.item?.name||'';
+      const wa=a.item?.weight??200;const wb=b.item?.weight??200;
+      if(sort==='az')return na.localeCompare(nb);
+      if(sort==='za')return nb.localeCompare(na);
+      if(sort==='asc')return wa-wb;
+      if(sort==='desc')return wb-wa;
+      return 0;
+    });
+  };
+  const sorted=[...sortedAssign(unpackedRows),...sortedAssign(packedRows)];
 
   const bagW = loc.bagWeight ?? 0;
   const contentsW = la.reduce((s,a)=>{ const item=items.find(i=>i.id===a.itemId); return s+(item?.weight??200)*a.quantity; },0);
@@ -522,15 +540,15 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSe
         :null
       }
       {sorted.map(a=>{
-        const item=items.find(i=>i.id===a.itemId);
-        return item?<ItemCard key={a.id} item={item} a={a} locColor={loc.color}
+        return a.item?<ItemCard key={a.id} item={a.item} a={a} locColor={loc.color}
           onToggle={()=>onToggle(a.itemId,loc.id)}
           onQty={q=>onQty(a.itemId,loc.id,q)}
           onOpen={()=>onOpen(a.itemId)}
           onDragStart={id=>startDrag(id)}
           onDragEnter={id=>enterDrag(id)}
           onDragEnd={handleDragEnd}
-          showInsertLine={overId===a.id&&dragId!==a.id&&overId!=='__bottom__'}/>:null;
+          showInsertLine={overId===a.id&&dragId!==a.id&&overId!=='__bottom__'}
+          sort={sort}/>:null;
       })}
       {/* Bottom drop zone — allows dropping after the last item */}
       <div
@@ -811,6 +829,52 @@ function Picker({items,assignments,locId,loc,onClose,onSelect,onCreateAdd}){
   </Modal>;
 }
 
+/* ── SORT HELPERS ────────────────────────────────────────────────── */
+const SORT_OPTS=[
+  {v:'personal',l:'Personal'},
+  {v:'az',l:'A → Z'},
+  {v:'za',l:'Z → A'},
+  {v:'asc',l:'Lightest first'},
+  {v:'desc',l:'Heaviest first'},
+];
+
+// Sort an array of assignment rows within a group (preserves group boundary)
+const sortAssignRows=(rows,sort)=>{
+  if(sort==='personal')return rows;
+  return [...rows].sort((a,b)=>{
+    const na=a.item?.name||'';const nb=b.item?.name||'';
+    const wa=a.item?.weight??200;const wb=b.item?.weight??200;
+    if(sort==='az')return na.localeCompare(nb);
+    if(sort==='za')return nb.localeCompare(na);
+    if(sort==='asc')return wa-wb;
+    if(sort==='desc')return wb-wa;
+    return 0;
+  });
+};
+
+// Sort items (not assignments) within a group
+const sortItems=(items,sort)=>{
+  if(sort==='personal')return items;
+  return [...items].sort((a,b)=>{
+    if(sort==='az')return a.name.localeCompare(b.name);
+    if(sort==='za')return b.name.localeCompare(a.name);
+    if(sort==='asc')return (a.weight??200)-(b.weight??200);
+    if(sort==='desc')return (b.weight??200)-(a.weight??200);
+    return 0;
+  });
+};
+
+function SortControl({value,onChange}){
+  return <div style={{display:'flex',alignItems:'center',gap:6}}>
+    <span style={{fontSize:11,color:'var(--tx3)',flexShrink:0}}>Sort</span>
+    <select value={value} onChange={e=>onChange(e.target.value)}
+      style={{background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:6,
+        padding:'4px 8px',color:'var(--tx)',fontSize:12,outline:'none',cursor:'pointer'}}>
+      {SORT_OPTS.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}
+    </select>
+  </div>;
+}
+
 /* ── SUMMARY SUB-VIEWS ───────────────────────────────────────────── */
 
 function StatusDot({packed}){
@@ -822,11 +886,14 @@ function StatusDot({packed}){
         border:'1.5px solid var(--sf3)',flexShrink:0}}/>;
 }
 
-function ListView({groups,items,showWeight}){
+function ListView({groups,items,showWeight,sort}){
   if(!groups.length) return <Empty/>;
   return groups.map(({loc,rows,totalW})=>{
-    const lTotal=rows.reduce((s,a)=>s+a.quantity,0);
-    const lPacked=rows.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+    const unpacked=sortAssignRows(rows.filter(a=>!a.packed),sort);
+    const packed=sortAssignRows(rows.filter(a=>a.packed),sort);
+    const sortedRows=[...unpacked,...packed];
+    const lTotal=sortedRows.reduce((s,a)=>s+a.quantity,0);
+    const lPacked=packed.reduce((s,a)=>s+a.quantity,0);
     return <div key={loc.id} style={{background:'var(--sf)',border:'1px solid var(--bd)',
       borderTop:`3px solid ${loc.color}`,borderRadius:10,marginBottom:16,overflow:'hidden'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
@@ -848,7 +915,7 @@ function ListView({groups,items,showWeight}){
           </tr>
         </thead>
         <tbody>
-          {rows.map(a=>{
+          {sortedRows.map(a=>{
             const itemObj=items.find(i=>i.id===a.itemId);
             const rowW=(itemObj?.weight??200)*a.quantity;
             return <tr key={a.id} style={{borderTop:'1px solid var(--bd)',background:a.packed?'rgba(63,214,138,.06)':'transparent'}}>
@@ -872,12 +939,15 @@ function ListView({groups,items,showWeight}){
   });
 }
 
-function BoardSummary({groups,showWeight}){
+function BoardSummary({groups,showWeight,sort}){
   if(!groups.length) return <Empty/>;
   return <div style={{display:'flex',gap:14,overflowX:'auto',paddingBottom:12,alignItems:'flex-start'}}>
     {groups.map(({loc,rows,totalW})=>{
-      const lTotal=rows.reduce((s,a)=>s+a.quantity,0);
-      const lPacked=rows.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+      const unpacked=sortAssignRows(rows.filter(a=>!a.packed),sort);
+      const packed=sortAssignRows(rows.filter(a=>a.packed),sort);
+      const sortedRows=[...unpacked,...packed];
+      const lTotal=sortedRows.reduce((s,a)=>s+a.quantity,0);
+      const lPacked=packed.reduce((s,a)=>s+a.quantity,0);
       const pct=lTotal>0?(lPacked/lTotal)*100:0;
       return <div key={loc.id} style={{minWidth:210,flex:1,background:'var(--sf)',
         border:'1px solid var(--bd)',borderTop:`3px solid ${loc.color}`,
@@ -896,7 +966,7 @@ function BoardSummary({groups,showWeight}){
           </div>
         </div>
         <div>
-          {rows.map(a=>(
+          {sortedRows.map(a=>(
             <div key={a.id} style={{display:'flex',alignItems:'center',gap:9,
               padding:'7px 14px',borderBottom:'1px solid var(--bd)',
               background:a.packed?'rgba(63,214,138,.05)':'transparent'}}>
@@ -911,7 +981,7 @@ function BoardSummary({groups,showWeight}){
   </div>;
 }
 
-function GridSummary({trip,showWeight}){
+function GridSummary({trip,showWeight,sort}){
   const locs=trip.locations;
   const assignedItems=trip.items.filter(item=>trip.assignments.some(a=>a.itemId===item.id));
   if(!assignedItems.length) return <Empty/>;
@@ -919,6 +989,10 @@ function GridSummary({trip,showWeight}){
   const byCategory=assignedItems.reduce((acc,item)=>{
     (acc[item.category]=acc[item.category]||[]).push(item);return acc;
   },{});
+  // Sort within each category group
+  Object.keys(byCategory).forEach(cat=>{
+    byCategory[cat]=sortItems(byCategory[cat],sort);
+  });
 
   const locStats=locs.map(loc=>{
     const la=trip.assignments.filter(a=>a.locationId===loc.id);
@@ -1007,6 +1081,7 @@ function Empty(){
 function Summary({trip,onResetPacked}){
   const [sumView,setSumView]=useState('list');
   const [showWeight,setShowWeight]=useState(true);
+  const [sort,setSort]=useState('personal');
   const{ask:confirm,el:confirmEl}=useConfirm();
   const totalItems=trip.assignments.reduce((s,a)=>s+a.quantity,0);
   const packedItems=trip.assignments.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
@@ -1054,6 +1129,7 @@ function Summary({trip,onResetPacked}){
               </button>
             ))}
           </div>
+          <SortControl value={sort} onChange={setSort}/>
           <button onClick={()=>setShowWeight(w=>!w)}
             style={{padding:'5px 12px',borderRadius:6,fontSize:12,fontWeight:600,
               background:showWeight?'var(--am-bg)':'var(--sf2)',
@@ -1101,9 +1177,9 @@ function Summary({trip,onResetPacked}){
         Tip: most compact for printing — use "Fit to page" in your browser print dialog.
       </div>}
 
-      {sumView==='list'&&<ListView groups={groups} items={trip.items} showWeight={showWeight}/>}
-      {sumView==='board'&&<BoardSummary groups={groups} showWeight={showWeight}/>}
-      {sumView==='grid'&&<GridSummary trip={trip} showWeight={showWeight}/>}
+      {sumView==='list'&&<ListView groups={groups} items={trip.items} showWeight={showWeight} sort={sort}/>}
+      {sumView==='board'&&<BoardSummary groups={groups} showWeight={showWeight} sort={sort}/>}
+      {sumView==='grid'&&<GridSummary trip={trip} showWeight={showWeight} sort={sort}/>}
     </div>
   </div>;
 }
@@ -1144,16 +1220,25 @@ function BagWeightModal({loc,onClose,onSave}){
 /* ── BOARD ───────────────────────────────────────────────────────── */
 function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onSetBagWeight,onDelLoc,onReorder}){
   const [activeIdx,setActiveIdx]=useState(0);
+  const [sort,setSort]=useState('personal');
   const scrollRef=useRef();
 
   const onScroll=()=>{
     const el=scrollRef.current;
     if(!el)return;
-    const colW=el.clientWidth; // on mobile each col is ~full width; on desktop doesn't matter
+    const colW=el.clientWidth;
     setActiveIdx(Math.round(el.scrollLeft/colW));
   };
 
   return <div style={{flex:1,display:'flex',flexDirection:'column',minHeight:0}}>
+    {/* Sort bar */}
+    <div className="np" style={{display:'flex',alignItems:'center',justifyContent:'flex-end',
+      padding:'6px 16px',borderBottom:'1px solid var(--bd)',flexShrink:0,gap:8}}>
+      <SortControl value={sort} onChange={setSort}/>
+      {sort!=='personal'&&<span style={{fontSize:11,color:'var(--tx3)'}}>
+        Drag to reorder only available in Personal order
+      </span>}
+    </div>
     <div ref={scrollRef} className="board-container" onScroll={onScroll}>
       {trip.locations.length===0&&<div style={{display:'flex',alignItems:'center',justifyContent:'center',
         flex:1,flexDirection:'column',gap:12,color:'var(--tx3)',padding:40,minWidth:'100%'}}>
@@ -1171,7 +1256,8 @@ function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onSetBagWe
           onRename={()=>onRenameLoc(loc.id)}
           onSetBagWeight={()=>onSetBagWeight(loc.id)}
           onDel={()=>onDelLoc(loc.id)}
-          onReorder={onReorder}/>
+          onReorder={onReorder}
+          sort={sort}/>
       ))}
       <button onClick={onAddLoc} className="board-add-loc"
         style={{width:200,flexShrink:0,alignSelf:'flex-start',
@@ -1537,7 +1623,7 @@ function TemplateLocationPicker({takenLocNames,onClose,onPick}){
 }
 
 /* ── TEMPLATE CARD ───────────────────────────────────────────────── */
-function TemplateCard({tpl,trips,onRename,onRemoveItem,onUpdateQty,onAddItem,onDelete,onApplyToTrip,onCreateAndApply}){
+function TemplateCard({tpl,trips,sort='personal',onRename,onRemoveItem,onUpdateQty,onAddItem,onDelete,onApplyToTrip,onCreateAndApply}){
   const [expanded,setExpanded]=useState(false);
   const [renaming,setRenaming]=useState(false);
   const [val,setVal]=useState('');
@@ -1617,12 +1703,19 @@ function TemplateCard({tpl,trips,onRename,onRemoveItem,onUpdateQty,onAddItem,onD
       {expanded&&<div style={{borderTop:'1px solid var(--bd)',padding:'12px 16px',
         display:'flex',flexDirection:'column',gap:14}}>
 
-        {Object.entries(byLoc).map(([locName,items])=>(
-          <div key={locName}>
+        {Object.entries(byLoc).map(([locName,items])=>{
+          const sortedItems = sort==='personal' ? items : [...items].sort((a,b)=>{
+            if(sort==='az') return a.itemName.localeCompare(b.itemName);
+            if(sort==='za') return b.itemName.localeCompare(a.itemName);
+            if(sort==='asc') return (a.itemWeight??200)-(b.itemWeight??200);
+            if(sort==='desc') return (b.itemWeight??200)-(a.itemWeight??200);
+            return 0;
+          });
+          return (<div key={locName}>
             <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',
               letterSpacing:1,fontWeight:600,marginBottom:6}}>{locName}</div>
             <div style={{display:'flex',flexDirection:'column',gap:4}}>
-              {items.map(a=>(
+              {sortedItems.map(a=>(
                 <div key={a._idx} style={{display:'flex',alignItems:'center',gap:8,
                   padding:'6px 10px',background:'var(--sf2)',borderRadius:7}}>
                   <span style={{flex:1,fontSize:13}}>{a.itemName}</span>
@@ -1652,7 +1745,8 @@ function TemplateCard({tpl,trips,onRename,onRemoveItem,onUpdateQty,onAddItem,onD
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
 
         {/* Add a new location to template */}
         <button onClick={e=>{e.stopPropagation();setPickingLoc(true);}}
@@ -1755,6 +1849,7 @@ function HomeScreen({trips,templates,onCreate,onSelect,onDelete,onRename,onDupli
   const [tab,setTab]=useState('trips');
   const [name,setName]=useState('');
   const [tplName,setTplName]=useState('');
+  const [tplSort,setTplSort]=useState('personal');
   const [renamingId,setRenamingId]=useState(null);
   const [renameVal,setRenameVal]=useState('');
   const{ask:confirm,el:confirmEl}=useConfirm();
@@ -1889,12 +1984,16 @@ function HomeScreen({trips,templates,onCreate,onSelect,onDelete,onRename,onDupli
           </div>
         </div>
 
+        {templates&&templates.length>0&&<div style={{display:'flex',justifyContent:'flex-end'}}>
+          <SortControl value={tplSort} onChange={setTplSort}/>
+        </div>}
+
         {(!templates||templates.length===0)&&<div style={{textAlign:'center',color:'var(--tx3)',
           padding:'16px 0',fontSize:13}}>
           No templates yet — create one above.
         </div>}
         {(templates||[]).slice().sort((a,b)=>b.createdAt-a.createdAt).map(tpl=>(
-          <TemplateCard key={tpl.id} tpl={tpl} trips={trips}
+          <TemplateCard key={tpl.id} tpl={tpl} trips={trips} sort={tplSort}
             onRename={name=>onRenameTemplate(tpl.id,name)}
             onRemoveItem={idx=>onRemoveTemplateItem(tpl.id,idx)}
             onUpdateQty={(idx,qty)=>onUpdateTemplateItemQty(tpl.id,idx,qty)}
