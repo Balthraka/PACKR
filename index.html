@@ -1606,7 +1606,7 @@ function TripHeader({trip,onHome,onRename,onSignOut,user,onUpdateUser,onSaveTemp
     {/* View toggle */}
     <div style={{display:'flex',background:'var(--sf2)',borderRadius:7,
       border:'1px solid var(--bd)',padding:2,flexShrink:0}}>
-      {[['board','Board'],['summary','Summary']].map(([v,l])=>(
+      {[['board','Locations'],['summary','Summary']].map(([v,l])=>(
         <button key={v} onClick={()=>onView(v)} style={{padding:'4px 10px',borderRadius:5,
           fontSize:12,fontWeight:600,
           background:view===v?'var(--sf3)':'transparent',
