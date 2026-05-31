@@ -666,22 +666,46 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
 
       <div style={{padding:'18px 18px 14px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
-          <div style={{flex:1,marginRight:12}}>
-            {/* Category label — tap to open editor in body */}
-            <button onClick={()=>{setEditingCat(c=>!c);setEditVal(null);setEditingWeight(false);}}
-              style={{fontSize:10,color:editingCat?'var(--am)':'var(--tx3)',textTransform:'uppercase',
-                letterSpacing:1,marginBottom:5,background:'none',padding:0,
-                display:'flex',alignItems:'center',gap:4}}
-              onMouseEnter={e=>e.currentTarget.style.color='var(--am)'}
-              onMouseLeave={e=>{if(!editingCat)e.currentTarget.style.color='var(--tx3)';}}>
-              {displayCat} ✎
-            </button>
+          <div style={{flex:1,marginRight:12,minWidth:0}}>
+            {/* Name — primary */}
             {editVal!==null
               ?<input value={editVal} onChange={e=>setEditVal(e.target.value)}
                   onKeyDown={e=>{if(e.key==='Enter')saveRename();if(e.key==='Escape')setEditVal(null);}}
                   autoFocus style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--am)',
-                    borderRadius:6,padding:'5px 9px',color:'var(--tx)',fontSize:16,fontWeight:600,outline:'none'}}/>
-              :<div style={{fontSize:17,fontWeight:700}}>{item.name}</div>
+                    borderRadius:6,padding:'5px 9px',color:'var(--tx)',fontSize:16,fontWeight:600,outline:'none',marginBottom:6}}/>
+              :<div style={{fontSize:17,fontWeight:700,marginBottom:6}}>{item.name}</div>
+            }
+            {/* Category — below name, inline edit replaces label */}
+            {editingCat
+              ?<div style={{overflowX:'auto',touchAction:'pan-x',
+                  overscrollBehaviorX:'contain',WebkitOverflowScrolling:'touch',
+                  scrollbarWidth:'none',msOverflowStyle:'none',
+                  maxWidth:'100%',minWidth:0}}>
+                  <div style={{display:'flex',gap:5,paddingBottom:2,width:'max-content'}}>
+                    {CATEGORIES.map(cat=>(
+                      <button key={cat} onClick={()=>{onSetCategory(cat);setEditingCat(false);}}
+                        style={{padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,
+                          flexShrink:0,border:`1px solid ${displayCat===cat?'var(--am)':'transparent'}`,
+                          background:displayCat===cat?'var(--am)':'var(--sf2)',
+                          color:displayCat===cat?'#1a0e00':'var(--tx2)',
+                          transition:'all .12s'}}>
+                        {cat}
+                      </button>
+                    ))}
+                    <button onClick={()=>setEditingCat(false)}
+                      style={{flexShrink:0,fontSize:10,color:'var(--tx3)',padding:'3px 8px',
+                        borderRadius:20,background:'var(--sf3)',border:'none',whiteSpace:'nowrap'}}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              :<button onClick={()=>{setEditingCat(true);setEditVal(null);setEditingWeight(false);}}
+                  style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,
+                    background:'none',padding:0,display:'flex',alignItems:'center',gap:4}}
+                  onMouseEnter={e=>e.currentTarget.style.color='var(--am)'}
+                  onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>
+                  {displayCat} ✎
+                </button>
             }
           </div>
           <button onClick={onClose} style={{color:'var(--tx2)',fontSize:19,flexShrink:0}}>✕</button>
@@ -728,18 +752,6 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
       </div>
 
       <div style={{flex:1,overflowY:'auto',padding:16,paddingBottom:'calc(16px + env(safe-area-inset-bottom))'}}>
-
-        {/* Category editor — lives in scroll body so pills can scroll horizontally */}
-        {editingCat&&<div style={{marginBottom:16,padding:'12px 14px',
-          background:'var(--sf2)',borderRadius:9,border:'1px solid var(--am)'}}>
-          <div style={{fontSize:10,color:'var(--am)',textTransform:'uppercase',
-            letterSpacing:1,marginBottom:8}}>Choose category</div>
-          <CategoryPills value={displayCat} onChange={c=>{onSetCategory(c);setEditingCat(false);}}/>
-          <button onClick={()=>setEditingCat(false)}
-            style={{fontSize:11,color:'var(--tx3)',marginTop:8,padding:0,background:'none'}}>
-            Cancel
-          </button>
-        </div>}
 
         <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>
           Location Assignments
