@@ -270,6 +270,11 @@ const CATEGORIES=[...new Set(ITEM_TPLS.map(([,c])=>c)),'Other'];
 // Normalise legacy 'Custom' to 'Other' for display (stored value unchanged)
 const normCat=c=>(c==='Custom'?'Other':c)||'Other';
 
+// Partial packing helpers — backward compatible with old boolean-only assignments
+const getPackedQty=a=>a.packedQty??( a.packed?a.quantity:0);
+const isFullyPacked=a=>a.quantity>0&&getPackedQty(a)>=a.quantity;
+const isPartiallyPacked=a=>getPackedQty(a)>0&&!isFullyPacked(a);
+
 const mkTrip = name => ({
   id:genId(), name, createdAt:Date.now(),
   locations: DEFAULT_LOCS.map(l=>({...l,id:genId()})),
@@ -360,13 +365,11 @@ function Qty({value,onChange}){
 }
 
 function PackBox({packed,onChange}){
-  const [pop,setPop]=useState(false);
-  const handle=()=>{if(!packed){setPop(true);setTimeout(()=>setPop(false),300);}onChange();};
-  return <button onClick={handle} style={{width:26,height:26,borderRadius:6,flexShrink:0,
+  return <button onClick={onChange} style={{width:26,height:26,borderRadius:6,flexShrink:0,
     border:`2px solid ${packed?'var(--gn)':'var(--sf3)'}`,
     background:packed?'var(--gn)':'transparent',color:'#fff',
     fontSize:13,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',
-    transition:'all .15s',animation:pop?'chk .25s ease':'none'}}>
+    transition:'all .15s'}}>
     {packed?'✓':''}
   </button>;
 }
@@ -403,13 +406,75 @@ const findScrollable=el=>{
   return null;
 };
 
-function ItemCard({item,a,locColor,onToggle,onQty,onOpen,onDragStart,onDragEnter,onDragEnd,showInsertLine,sort='personal'}){
-  const canDrag=!a.packed&&sort==='personal';
+function ItemCard({item,a,locColor,onQty,onSetPackedQty,onOpen,onDragStart,onDragEnter,onDragEnd,showInsertLine,sort='personal',onStepperChange}){
+  const packedQty=getPackedQty(a);
+  const full=isFullyPacked(a);
+  const partial=isPartiallyPacked(a);
+  const canDrag=!full&&sort==='personal';
+
+  const [showStepper,setShowStepper]=useState(false);
+  const [completing,setCompleting]=useState(false);
+  const autoCloseTimer=useRef(null);
+
+  const clearAutoClose=()=>{
+    if(autoCloseTimer.current){clearTimeout(autoCloseTimer.current);autoCloseTimer.current=null;}
+  };
+  const resetAutoClose=()=>{
+    clearAutoClose();
+    autoCloseTimer.current=setTimeout(()=>closeStepper(),5000);
+  };
+  useEffect(()=>()=>clearAutoClose(),[]);
+
+  const openStepper=()=>{setShowStepper(true);onStepperChange&&onStepperChange(a.id);resetAutoClose();};
+  const closeStepper=()=>{setShowStepper(false);onStepperChange&&onStepperChange(null);clearAutoClose();};
+
+  const triggerComplete=()=>{
+    setCompleting(true);
+    closeStepper();
+    setTimeout(()=>{
+      onSetPackedQty(a.quantity);
+      setCompleting(false);
+    },600);
+  };
+
+  const handleIndicatorTap=()=>{
+    if(completing)return;
+    if(showStepper){
+      closeStepper();
+    } else if(a.quantity===1){
+      // Single item: direct toggle, no stepper ever
+      if(full) onSetPackedQty(0);
+      else triggerComplete();
+    } else {
+      openStepper();
+    }
+  };
+
+  const handleStepperChange=qty=>{
+    if(qty>=a.quantity){
+      triggerComplete();
+    } else {
+      onSetPackedQty(Math.max(0,qty));
+      if(qty<=0) closeStepper();
+      else resetAutoClose(); // reset timer on each tap
+    }
+  };
+
+  const handleNumberTap=()=>{
+    if(completing)return;
+    if(full){
+      // Fully packed → tap fraction unpacks all
+      onSetPackedQty(0);
+      closeStepper();
+    } else {
+      // Partial → tap fraction packs all
+      triggerComplete();
+    }
+  };
 
   const onHandleTouchStart=e=>{
     e.stopPropagation();
     onDragStart(a.id);
-
     const ghost=document.createElement('div');
     ghost.textContent=item.name;
     Object.assign(ghost.style,{
@@ -422,86 +487,112 @@ function ItemCard({item,a,locColor,onToggle,onQty,onOpen,onDragStart,onDragEnter
       transform:'translate(-50%,-180%)',
     });
     document.body.appendChild(ghost);
-
-    let scrollEl=null;
-    let scrollTimer=null;
-
+    let scrollEl=null,scrollTimer=null;
     const move=ev=>{
       ev.preventDefault();
       const t=ev.touches[0];
       ghost.style.left=t.clientX+'px';
       ghost.style.top=t.clientY+'px';
-
-      // Find drop target
       const el=document.elementFromPoint(t.clientX,t.clientY);
       const card=el?.closest('[data-assignid]');
       if(card&&card.dataset.assignid!==a.id) onDragEnter(card.dataset.assignid);
-
-      // Auto-scroll: find scrollable container and scroll when near edges
       if(!scrollEl) scrollEl=findScrollable(el);
       if(scrollEl){
         const rect=scrollEl.getBoundingClientRect();
         const ZONE=80,SPEED=6;
         clearTimeout(scrollTimer);
-        if(t.clientY-rect.top<ZONE){
-          const step=()=>{scrollEl.scrollBy(0,-SPEED);scrollTimer=setTimeout(step,16);};
-          step();
-        }else if(rect.bottom-t.clientY<ZONE){
-          const step=()=>{scrollEl.scrollBy(0,SPEED);scrollTimer=setTimeout(step,16);};
-          step();
-        }
+        if(t.clientY-rect.top<ZONE){const step=()=>{scrollEl.scrollBy(0,-SPEED);scrollTimer=setTimeout(step,16);};step();}
+        else if(rect.bottom-t.clientY<ZONE){const step=()=>{scrollEl.scrollBy(0,SPEED);scrollTimer=setTimeout(step,16);};step();}
       }
     };
-    const end=()=>{
-      ghost.remove();
-      clearTimeout(scrollTimer);
-      onDragEnd();
-      document.removeEventListener('touchmove',move);
-      document.removeEventListener('touchend',end);
-    };
+    const end=()=>{ghost.remove();clearTimeout(scrollTimer);onDragEnd();
+      document.removeEventListener('touchmove',move);document.removeEventListener('touchend',end);};
     document.addEventListener('touchmove',move,{passive:false});
     document.addEventListener('touchend',end);
   };
 
+  // Left indicator — always visible, tap to enter/exit pack mode
+  const indicator=<div onClick={handleIndicatorTap} style={{flexShrink:0,cursor:'pointer'}}>
+    {completing
+      ?<div style={{width:20,height:20,borderRadius:4,background:locColor,
+          display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+            <path d="M1 4l3 3 6-6" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+        </div>
+      :full
+      ?<div style={{width:20,height:20,borderRadius:4,background:'var(--gn)',
+          display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+            <path d="M1 4l3 3 6-6" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+        </div>
+      :partial
+      ?<div style={{width:20,height:20,borderRadius:4,background:locColor,
+          display:'flex',alignItems:'center',justifyContent:'center',
+          boxShadow:showStepper?`0 0 0 2px ${locColor}40`:undefined}}>
+          <span style={{fontSize:packedQty>=10?8:11,fontWeight:700,color:'#fff',lineHeight:1}}>
+            {packedQty}
+          </span>
+        </div>
+      :<div style={{width:20,height:20,borderRadius:4,border:'1.5px solid var(--bd)',
+          background:'transparent',
+          boxShadow:showStepper?`0 0 0 2px ${locColor}40`:undefined}}/>
+    }
+  </div>;
+
   return <>
-    {showInsertLine&&<div style={{height:3,borderRadius:2,background:'var(--am)',
-      margin:'2px 6px',flexShrink:0}}/>}
+    {showInsertLine&&<div style={{height:3,borderRadius:2,background:'var(--am)',margin:'2px 6px',flexShrink:0}}/>}
     <div
       data-assignid={a.id}
       draggable={canDrag}
-      onDragStart={canDrag?e=>{
-        e.dataTransfer.effectAllowed='move';
-        onDragStart(a.id);
-      }:undefined}
+      onDragStart={canDrag?e=>{e.dataTransfer.effectAllowed='move';onDragStart(a.id);}:undefined}
       onDragEnter={e=>{e.preventDefault();if(onDragEnter)onDragEnter(a.id);}}
       onDragOver={e=>e.preventDefault()}
       onDragEnd={canDrag?onDragEnd:undefined}
-      style={{background:a.packed?`${locColor}0c`:'var(--sf2)',
-        border:`1px solid ${a.packed?locColor+'38':'var(--bd)'}`,
+      style={{background:full?`${locColor}0c`:'var(--sf2)',
+        border:`1px solid ${full?locColor+'38':partial||showStepper?locColor+'60':'var(--bd)'}`,
         borderRadius:8,padding:'9px 11px',display:'flex',alignItems:'center',gap:8,
-        transition:'border-color .15s',opacity:a.packed?.58:1,marginBottom:6}}>
+        transition:'all .2s',opacity:(full&&!showStepper)?.58:1,marginBottom:6}}>
       {canDrag&&<span
         onTouchStart={IS_TOUCH_PRIMARY?onHandleTouchStart:undefined}
-        style={{color:'var(--tx3)',fontSize:16,flexShrink:0,
-          lineHeight:1,padding:'4px 4px',userSelect:'none',
-          touchAction:'none',cursor:'grab'}}>
+        style={{color:'var(--tx3)',fontSize:16,flexShrink:0,lineHeight:1,
+          padding:'4px 4px',userSelect:'none',touchAction:'none',cursor:'grab'}}>
         ⠿
       </span>}
-      <PackBox packed={a.packed} onChange={onToggle}/>
+      {indicator}
       <span onClick={onOpen} style={{flex:1,fontSize:13,fontWeight:500,cursor:'pointer',
-        textDecoration:a.packed?'line-through':'none',color:'var(--tx)'}}>
+        textDecoration:full?'line-through':'none',color:'var(--tx)',minWidth:0,
+        overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
         {item.name}
       </span>
-      <Qty value={a.quantity} onChange={onQty}/>
+      {/* Right side: packed stepper in pack mode, qty stepper normally */}
+      {showStepper
+        ?<div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+            <button onClick={()=>handleStepperChange(packedQty-1)}
+              style={{width:22,height:22,borderRadius:4,background:'var(--sf3)',
+                fontSize:15,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx)'}}>−</button>
+            <span onClick={handleNumberTap}
+              style={{fontSize:12,fontWeight:700,color:'var(--am)',minWidth:36,
+                textAlign:'center',cursor:'pointer',userSelect:'none',whiteSpace:'nowrap'}}>
+              {packedQty}/{a.quantity}
+            </span>
+            <button onClick={()=>handleStepperChange(packedQty+1)}
+              style={{width:22,height:22,borderRadius:4,background:'var(--sf3)',
+                fontSize:15,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx)'}}>+</button>
+          </div>
+        :<Qty value={a.quantity} onChange={onQty}/>
+      }
     </div>
   </>;
 }
 
 /* ── LOCATION COLUMN ─────────────────────────────────────────────── */
-function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSetBagWeight,onSetWeightLimit,onDel,onReorder,onPackAll,onUnpackAll,isFirst,isLast,onMoveLeft,onMoveRight,sort='personal'}){
+function LocCol({loc,items,assignments,onAdd,onQty,onSetPackedQty,onOpen,onRename,onSetBagWeight,onSetWeightLimit,onDel,onReorder,onPackAll,onUnpackAll,isFirst,isLast,onMoveLeft,onMoveRight,sort='personal'}){
   const [menu,setMenu]=useState(false);
   const [dragId,setDragId]=useState(null);
   const [overId,setOverId]=useState(null);
+  const [stepperItemId,setStepperItemId]=useState(null); // which item has stepper open
   // Refs so handleDragEnd always reads current values, not stale closure
   const dragIdRef=useRef(null);
   const overIdRef=useRef(null);
@@ -516,14 +607,17 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSe
 
   const la=assignments.filter(a=>a.locationId===loc.id);
   const total=la.reduce((s,a)=>s+a.quantity,0);
-  const packed=la.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
-  const pct=total>0?packed/total:0;
-  const done=total>0&&packed===total;
+  // Proportional: sum of packedQty across all items (partial counts fractionally)
+  const packedCount=la.reduce((s,a)=>s+getPackedQty(a),0);
+  const pct=total>0?packedCount/total:0;
+  const done=total>0&&packedCount===total;
 
-  // Sort within each packed/unpacked group; attach item for sort comparators
+  // Sort: partial stays with unpacked, only fully packed sinks to bottom
+  // Items with stepper open stay in their current group (prevents jumping during interaction)
+  const isConsideredPacked=a=>isFullyPacked(a)&&a.id!==stepperItemId;
   const withItem=la.map(a=>({...a,item:items.find(i=>i.id===a.itemId)}));
-  const unpackedRows=withItem.filter(a=>!a.packed);
-  const packedRows=withItem.filter(a=>a.packed);
+  const unpackedRows=withItem.filter(a=>!isConsideredPacked(a));
+  const packedRows=withItem.filter(a=>isConsideredPacked(a));
   const sortedAssign=(rows)=>{
     if(sort==='personal')return rows;
     return [...rows].sort((a,b)=>{
@@ -597,7 +691,7 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSe
       </div>
       <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--tx3)',marginBottom:7}}>
         <span>{la.length} item{la.length!==1?'s':''} · {total} total</span>
-        <span style={{color:done?'var(--gn)':'var(--tx3)'}}>{packed}/{total} packed</span>
+        <span style={{color:done?'var(--gn)':'var(--tx3)'}}>{packedCount}/{total} packed</span>
       </div>
       <div style={{height:3,background:'var(--sf3)',borderRadius:2,overflow:'hidden'}}>
         <div style={{height:'100%',borderRadius:2,transition:'width .35s ease',
@@ -616,13 +710,14 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSe
       }
       {sorted.map(a=>{
         return a.item?<ItemCard key={a.id} item={a.item} a={a} locColor={loc.color}
-          onToggle={()=>onToggle(a.itemId,loc.id)}
           onQty={q=>onQty(a.itemId,loc.id,q)}
+          onSetPackedQty={q=>onSetPackedQty(a.itemId,loc.id,q)}
           onOpen={()=>onOpen(a.itemId)}
           onDragStart={id=>startDrag(id)}
           onDragEnter={id=>enterDrag(id)}
           onDragEnd={handleDragEnd}
           showInsertLine={overId===a.id&&dragId!==a.id&&overId!=='__bottom__'}
+          onStepperChange={setStepperItemId}
           sort={sort}/>:null;
       })}
       {/* Bottom drop zone — allows dropping after the last item */}
@@ -651,7 +746,7 @@ function LocCol({loc,items,assignments,onAdd,onToggle,onQty,onOpen,onRename,onSe
             display:'flex',alignItems:'center',justifyContent:'center',gap:3}}>
           ✓ Pack all
         </button>}
-        {packedRows.length>0&&<button onClick={()=>confirm('Mark all items in this bag as unpacked?',onUnpackAll,false)}
+        {la.some(a=>getPackedQty(a)>0)&&<button onClick={()=>confirm('Mark all items in this bag as unpacked?',onUnpackAll,false)}
           style={{flex:1,padding:'5px',borderRadius:6,fontSize:11,fontWeight:600,
             background:'transparent',border:'1px solid var(--sf3)',color:'var(--tx3)',
             display:'flex',alignItems:'center',justifyContent:'center',gap:3}}>
@@ -671,7 +766,7 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
   const wRef=useRef();
   const{ask:confirm,el:confirmEl}=useConfirm();
   const totalQty=assignments.reduce((s,a)=>s+a.quantity,0);
-  const packedQty=assignments.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+  const packedQtyTotal=assignments.reduce((s,a)=>s+getPackedQty(a),0);
   const itemWeight = item.weight ?? 200;
   const totalWeight = itemWeight * totalQty;
   const saveRename=()=>{if(editVal?.trim())onRename(editVal.trim());setEditVal(null);};
@@ -740,7 +835,7 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
 
         {/* Stats row */}
         <div style={{display:'flex',gap:8,marginBottom:12}}>
-          {[['Total',totalQty,'var(--am)'],['Packed',packedQty,'var(--gn)'],['To Pack',totalQty-packedQty,'var(--tx2)']].map(([l,v,c])=>(
+          {[['Total',totalQty,'var(--am)'],['Packed',packedQtyTotal,'var(--gn)'],['To Pack',totalQty-packedQtyTotal,'var(--tx2)']].map(([l,v,c])=>(
             <div key={l} style={{flex:1,background:'var(--sf2)',borderRadius:7,padding:'8px 10px',textAlign:'center'}}>
               <div style={{fontSize:21,fontWeight:700,color:c}}>{v}</div>
               <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>{l}</div>
@@ -795,8 +890,9 @@ function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,
               display:'flex',alignItems:'center',gap:12,transition:'all .2s'}}>
               <div style={{flex:1}}>
                 <div style={{fontWeight:600,fontSize:13,color:qty>0?'var(--tx)':'var(--tx3)'}}>{loc.name}</div>
-                {qty>0&&a&&<div style={{fontSize:11,marginTop:2,color:a.packed?'var(--gn)':'var(--tx3)'}}>
-                  {a.packed?'✓ Packed':'Not yet packed'}{qty>0?` · ~${fmtW(locW)}`:''}
+                {qty>0&&a&&<div style={{fontSize:11,marginTop:2,
+                  color:isFullyPacked(a)?'var(--gn)':isPartiallyPacked(a)?'var(--am)':'var(--tx3)'}}>
+                  {isFullyPacked(a)?'✓ Packed':isPartiallyPacked(a)?`${getPackedQty(a)}/${a.quantity} packed`:'Not yet packed'}{qty>0?` · ~${fmtW(locW)}`:''}
                 </div>}
               </div>
               {qty>0&&a&&<PackBox packed={a.packed} onChange={()=>onToggle(loc.id)}/>}
@@ -1034,23 +1130,25 @@ function SortControl({value,onChange}){
 
 /* ── SUMMARY SUB-VIEWS ───────────────────────────────────────────── */
 
-function StatusDot({packed}){
-  return packed
-    ?<span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',
-        width:16,height:16,borderRadius:'50%',background:'var(--gn)',
-        color:'#0f1419',fontSize:10,fontWeight:700,flexShrink:0}}>✓</span>
-    :<span style={{display:'inline-block',width:16,height:16,borderRadius:'50%',
-        border:'1.5px solid var(--sf3)',flexShrink:0}}/>;
+function StatusDot({a}){
+  if(isFullyPacked(a)) return <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',
+      width:16,height:16,borderRadius:'50%',background:'var(--gn)',
+      color:'#0f1419',fontSize:10,fontWeight:700,flexShrink:0}}>✓</span>;
+  if(isPartiallyPacked(a)) return <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',
+      width:16,height:16,borderRadius:'50%',background:'var(--am)',
+      color:'#1a0e00',fontSize:9,fontWeight:700,flexShrink:0}}>½</span>;
+  return <span style={{display:'inline-block',width:16,height:16,borderRadius:'50%',
+      border:'1.5px solid var(--sf3)',flexShrink:0}}/>;
 }
 
 function ListView({groups,showWeight,sort}){
   if(!groups.length) return <Empty/>;
   return groups.map(({loc,rows,totalW})=>{
-    const unpacked=sortAssignRows(rows.filter(a=>!a.packed),sort);
-    const packed=sortAssignRows(rows.filter(a=>a.packed),sort);
+    const unpacked=sortAssignRows(rows.filter(a=>!isFullyPacked(a)),sort);
+    const packed=sortAssignRows(rows.filter(a=>isFullyPacked(a)),sort);
     const sortedRows=[...unpacked,...packed];
     const lTotal=sortedRows.reduce((s,a)=>s+a.quantity,0);
-    const lPacked=packed.reduce((s,a)=>s+a.quantity,0);
+    const lPacked=sortedRows.reduce((s,a)=>s+getPackedQty(a),0);
     return <div key={loc.id} style={{background:'var(--sf)',border:'1px solid var(--bd)',
       borderTop:`3px solid ${loc.color}`,borderRadius:10,marginBottom:16,overflow:'hidden'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
@@ -1074,18 +1172,27 @@ function ListView({groups,showWeight,sort}){
         <tbody>
           {sortedRows.map(a=>{
             const rowW=(a.item?.weight??200)*a.quantity;
-            return <tr key={a.id} style={{borderTop:'1px solid var(--bd)',background:a.packed?'rgba(63,214,138,.06)':'transparent'}}>
-              <td style={{padding:'8px 0 8px 16px',textAlign:'center'}}><StatusDot packed={a.packed}/></td>
+            return <tr key={a.id} style={{borderTop:'1px solid var(--bd)',
+              background:isFullyPacked(a)?'rgba(63,214,138,.06)':isPartiallyPacked(a)?'rgba(245,166,35,.04)':'transparent'}}>
+              <td style={{padding:'8px 0 8px 16px',textAlign:'center'}}><StatusDot a={a}/></td>
               <td style={{padding:'8px 16px',fontSize:13,color:'var(--tx)'}}>{a.item.name}</td>
               <td style={{padding:'8px 16px',textAlign:'center',fontSize:13,fontWeight:700}}>{a.quantity}</td>
               {showWeight&&<td style={{padding:'8px 16px',textAlign:'right',fontSize:12,color:'var(--tx3)'}}>{fmtW(rowW)}</td>}
               <td style={{padding:'8px 16px',textAlign:'center'}}>
-                <span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:4,
-                  textTransform:'uppercase',letterSpacing:.5,
-                  background:a.packed?'rgba(63,214,138,.15)':'rgba(240,82,82,.1)',
-                  color:a.packed?'var(--gn)':'var(--rd)'}}>
-                  {a.packed?'Packed':'To Pack'}
-                </span>
+                {isFullyPacked(a)
+                  ?<span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:4,
+                      textTransform:'uppercase',letterSpacing:.5,
+                      background:'rgba(63,214,138,.15)',color:'var(--gn)'}}>Packed</span>
+                  :isPartiallyPacked(a)
+                  ?<span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:4,
+                      textTransform:'uppercase',letterSpacing:.5,
+                      background:'rgba(245,166,35,.15)',color:'var(--am)'}}>
+                      {getPackedQty(a)}/{a.quantity}
+                    </span>
+                  :<span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:4,
+                      textTransform:'uppercase',letterSpacing:.5,
+                      background:'rgba(240,82,82,.1)',color:'var(--rd)'}}>To Pack</span>
+                }
               </td>
             </tr>;
           })}
@@ -1099,11 +1206,11 @@ function BoardSummary({groups,showWeight,sort}){
   if(!groups.length) return <Empty/>;
   return <div style={{display:'flex',gap:14,overflowX:'auto',paddingBottom:12,alignItems:'flex-start'}}>
     {groups.map(({loc,rows,totalW})=>{
-      const unpacked=sortAssignRows(rows.filter(a=>!a.packed),sort);
-      const packed=sortAssignRows(rows.filter(a=>a.packed),sort);
+      const unpacked=sortAssignRows(rows.filter(a=>!isFullyPacked(a)),sort);
+      const packed=sortAssignRows(rows.filter(a=>isFullyPacked(a)),sort);
       const sortedRows=[...unpacked,...packed];
       const lTotal=sortedRows.reduce((s,a)=>s+a.quantity,0);
-      const lPacked=packed.reduce((s,a)=>s+a.quantity,0);
+      const lPacked=sortedRows.reduce((s,a)=>s+getPackedQty(a),0);
       const pct=lTotal>0?(lPacked/lTotal)*100:0;
       return <div key={loc.id} style={{minWidth:210,flex:1,background:'var(--sf)',
         border:'1px solid var(--bd)',borderTop:`3px solid ${loc.color}`,
@@ -1125,10 +1232,13 @@ function BoardSummary({groups,showWeight,sort}){
           {sortedRows.map(a=>(
             <div key={a.id} style={{display:'flex',alignItems:'center',gap:9,
               padding:'7px 14px',borderBottom:'1px solid var(--bd)',
-              background:a.packed?'rgba(63,214,138,.05)':'transparent'}}>
-              <StatusDot packed={a.packed}/>
-              <span style={{flex:1,fontSize:12,color:'var(--tx)'}}>{a.item.name}</span>
-              <span style={{fontSize:12,fontWeight:700,color:'var(--tx2)',flexShrink:0}}>×{a.quantity}</span>
+              background:isFullyPacked(a)?'rgba(63,214,138,.05)':isPartiallyPacked(a)?'rgba(245,166,35,.04)':'transparent'}}>
+              <StatusDot a={a}/>
+              <span style={{flex:1,fontSize:12,color:'var(--tx)',
+                textDecoration:isFullyPacked(a)?'line-through':'none'}}>{a.item.name}</span>
+              <span style={{fontSize:12,fontWeight:700,color:'var(--tx2)',flexShrink:0}}>
+                {isPartiallyPacked(a)?`${getPackedQty(a)}/`:''}{a.quantity}
+              </span>
             </div>
           ))}
         </div>
@@ -1157,7 +1267,7 @@ function GridSummary({trip,showWeight,sort}){
     const totalW=(loc.bagWeight??0)+contentsW;
     return{
       total:la.reduce((s,a)=>s+a.quantity,0),
-      packed:la.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0),
+      packed:la.reduce((s,a)=>s+getPackedQty(a),0),
       totalW,
     };
   });
@@ -1166,10 +1276,13 @@ function GridSummary({trip,showWeight,sort}){
     const a=trip.assignments.find(x=>x.itemId===item.id&&x.locationId===loc.id);
     if(!a) return <td key={loc.id} style={{padding:'5px 8px',textAlign:'center',
       border:'1px solid var(--bd)',color:'var(--tx3)',fontSize:11}}>–</td>;
+    const pqty=getPackedQty(a);
+    const full=isFullyPacked(a);
+    const partial=isPartiallyPacked(a);
     return <td key={loc.id} style={{padding:'5px 8px',textAlign:'center',border:'1px solid var(--bd)',
-      background:a.packed?'rgba(63,214,138,.12)':loc.color+'18'}}>
-      <span style={{fontWeight:700,fontSize:12,color:a.packed?'var(--gn)':loc.color}}>
-        {a.quantity}{a.packed?' ✓':''}
+      background:full?'rgba(63,214,138,.12)':partial?'rgba(245,166,35,.08)':loc.color+'18'}}>
+      <span style={{fontWeight:700,fontSize:12,color:full?'var(--gn)':partial?'var(--am)':loc.color}}>
+        {partial?`${pqty}/${a.quantity}`:a.quantity}{full?' ✓':''}
       </span>
     </td>;
   };
@@ -1245,7 +1358,7 @@ function Summary({trip,onResetPacked}){
   const [sort,setSort]=useState('personal');
   const{ask:confirm,el:confirmEl}=useConfirm();
   const totalItems=trip.assignments.reduce((s,a)=>s+a.quantity,0);
-  const packedItems=trip.assignments.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+  const packedItems=trip.assignments.reduce((s,a)=>s+getPackedQty(a),0);
   const pct=totalItems>0?(packedItems/totalItems)*100:0;
 
   // Compute total weight across all locations (contents only, no double-counting bags)
@@ -1263,7 +1376,7 @@ function Summary({trip,onResetPacked}){
       .filter(a=>a.locationId===loc.id)
       .map(a=>({...a,item:trip.items.find(i=>i.id===a.itemId)}))
       .filter(a=>a.item)
-      .sort((a,b)=>(a.packed?1:0)-(b.packed?1:0));
+      .sort((a,b)=>(isFullyPacked(a)?1:0)-(isFullyPacked(b)?1:0));
     const contW=rows.reduce((s,a)=>s+(a.item?.weight??200)*a.quantity,0);
     return{loc,rows,totalW:bagW+contW};
   }).filter(g=>g.rows.length>0);
@@ -1424,7 +1537,7 @@ function BagWeightModal({loc,onClose,onSave}){
 }
 
 /* ── BOARD ───────────────────────────────────────────────────────── */
-function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onSetBagWeight,onSetWeightLimit,onDelLoc,onReorder,onPackAll,onUnpackAll,onReorderLoc}){
+function Board({trip,onAdd,onQty,onSetPackedQty,onOpen,onAddLoc,onRenameLoc,onSetBagWeight,onSetWeightLimit,onDelLoc,onReorder,onPackAll,onUnpackAll,onReorderLoc}){
   const [activeIdx,setActiveIdx]=useState(0);
   const [sort,setSort]=useState('personal');
   const scrollRef=useRef();
@@ -1459,7 +1572,9 @@ function Board({trip,onAdd,onToggle,onQty,onOpen,onAddLoc,onRenameLoc,onSetBagWe
       </div>}
       {trip.locations.map(loc=>(
         <LocCol key={loc.id} loc={loc} items={trip.items} assignments={trip.assignments}
-          onAdd={()=>onAdd(loc.id)} onToggle={onToggle} onQty={onQty} onOpen={onOpen}
+          onAdd={()=>onAdd(loc.id)} onQty={onQty}
+          onSetPackedQty={onSetPackedQty}
+          onOpen={onOpen}
           onRename={()=>onRenameLoc(loc.id)}
           onSetBagWeight={()=>onSetBagWeight(loc.id)}
           onSetWeightLimit={()=>onSetWeightLimit(loc.id)}
@@ -1503,7 +1618,176 @@ function SaveIndicator({status}){
     transition:'opacity .3s',whiteSpace:'nowrap'}}>{cfg.text}</span>;
 }
 
-/* ── DISPLAY NAME ────────────────────────────────────────────────── */
+/* ── CHANGE PASSWORD MODAL ───────────────────────────────────────── */
+function ChangePasswordModal({onClose}){
+  const [pw,setPw]=useState('');
+  const [confirm,setConfirm]=useState('');
+  const [status,setStatus]=useState(''); // '' | 'saving' | 'error'
+  const [errMsg,setErrMsg]=useState('');
+  const ref=useRef();
+  useEffect(()=>{ref.current?.focus();},[]);
+
+  const save=async()=>{
+    if(!pw||pw.length<6){setErrMsg('Password must be at least 6 characters.');return;}
+    if(pw!==confirm){setErrMsg('Passwords do not match.');return;}
+    setStatus('saving');setErrMsg('');
+    try{
+      const{error}=await sb.auth.updateUser({password:pw});
+      if(error)throw error;
+      onClose('success'); // close immediately, pass success signal
+    }catch(e){
+      setErrMsg(e.message||'Something went wrong.');
+      setStatus('');
+    }
+  };
+
+  return <Modal title="Change Password" onClose={()=>onClose()}>
+    <div style={{display:'flex',flexDirection:'column',gap:12}}>
+      <div>
+        <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,textTransform:'uppercase',letterSpacing:.7}}>New Password</div>
+        <input ref={ref} type="password" value={pw} onChange={e=>setPw(e.target.value)}
+          onKeyDown={e=>e.key==='Enter'&&save()}
+          style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+            borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
+      </div>
+      <div>
+        <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,textTransform:'uppercase',letterSpacing:.7}}>Confirm Password</div>
+        <input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)}
+          onKeyDown={e=>e.key==='Enter'&&save()}
+          style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+            borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
+      </div>
+      {errMsg&&<div style={{fontSize:12,color:'var(--rd)',padding:'8px 10px',
+        background:'rgba(240,82,82,.08)',borderRadius:6,border:'1px solid rgba(240,82,82,.2)'}}>
+        {errMsg}
+      </div>}
+      <button onClick={save} disabled={status==='saving'}
+        style={{width:'100%',padding:'11px',borderRadius:8,background:'var(--am)',
+          color:'#1a0e00',fontWeight:700,fontSize:14,opacity:status==='saving'?'.6':'1'}}>
+        {status==='saving'?'Updating…':'Update Password'}
+      </button>
+    </div>
+  </Modal>;
+}
+
+/* ── DELETE ACCOUNT MODAL ────────────────────────────────────────── */
+function DeleteAccountModal({onClose,onDeleted}){
+  const [step,setStep]=useState(1); // 1=warning, 2=confirm
+  const [val,setVal]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState('');
+
+  const doDelete=async()=>{
+    setLoading(true);setErr('');
+    try{
+      const{error}=await sb.rpc('delete_my_account');
+      if(error)throw error;
+      onDeleted();
+    }catch(e){
+      setErr(e.message||'Something went wrong. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  return <Modal title="Delete Account" onClose={onClose}>
+    {step===1&&<>
+      <div style={{fontSize:13,color:'var(--tx)',lineHeight:1.6,marginBottom:16}}>
+        This will <strong>permanently delete your account and all your trips and templates</strong>. This cannot be undone.
+      </div>
+      <div style={{fontSize:12,color:'var(--tx3)',padding:'10px 12px',background:'var(--sf2)',
+        borderRadius:7,marginBottom:20,lineHeight:1.5}}>
+        Your email address will be freed up and you will be fully removed from the system.
+      </div>
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={onClose} style={{flex:1,padding:'10px',borderRadius:7,
+          background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:13,color:'var(--tx2)'}}>
+          Cancel
+        </button>
+        <button onClick={()=>setStep(2)} style={{flex:1,padding:'10px',borderRadius:7,
+          background:'rgba(240,82,82,.12)',border:'1px solid rgba(240,82,82,.3)',
+          fontSize:13,fontWeight:700,color:'var(--rd)'}}>
+          Continue
+        </button>
+      </div>
+    </>}
+    {step===2&&<>
+      <div style={{fontSize:13,color:'var(--tx)',marginBottom:12,lineHeight:1.6}}>
+        Type <strong style={{color:'var(--rd)'}}>DELETE</strong> to confirm you want to permanently delete all your data.
+      </div>
+      <input value={val} onChange={e=>setVal(e.target.value)} autoFocus
+        placeholder="Type DELETE"
+        style={{width:'100%',background:'var(--sf2)',border:`1px solid ${val==='DELETE'?'var(--rd)':'var(--bd)'}`,
+          borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none',marginBottom:12,
+          textAlign:'center',fontSize:16,fontWeight:700,letterSpacing:2}}/>
+      {err&&<div style={{fontSize:12,color:'var(--rd)',marginBottom:10}}>{err}</div>}
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={()=>{setStep(1);setVal('');}} style={{flex:1,padding:'10px',borderRadius:7,
+          background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:13,color:'var(--tx2)'}}>
+          Back
+        </button>
+        <button onClick={doDelete} disabled={val!=='DELETE'||loading}
+          style={{flex:1,padding:'10px',borderRadius:7,fontSize:13,fontWeight:700,
+            background:'rgba(240,82,82,.12)',border:'1px solid rgba(240,82,82,.3)',
+            color:'var(--rd)',opacity:val==='DELETE'&&!loading?1:.45}}>
+          {loading?'Deleting…':'Delete Everything'}
+        </button>
+      </div>
+    </>}
+  </Modal>;
+}
+
+/* ── USER MENU (cog) ─────────────────────────────────────────────── */
+function UserMenu({user,rowId,onUpdate,onChangePw,onSignOut,pwSuccess}){
+  const [open,setOpen]=useState(false);
+  const [showDel,setShowDel]=useState(false);
+  const ref=useRef();
+  useEffect(()=>{
+    if(!open)return;
+    const fn=e=>{if(!ref.current?.contains(e.target))setOpen(false);};
+    document.addEventListener('mousedown',fn);
+    return()=>document.removeEventListener('mousedown',fn);
+  },[open]);
+
+  return <div ref={ref} style={{position:'relative',display:'flex',alignItems:'center',gap:4}}>
+    <DisplayName user={user} onUpdate={onUpdate}/>
+    <button onClick={()=>setOpen(o=>!o)}
+      title="Account settings"
+      style={{width:28,height:28,borderRadius:6,fontSize:15,
+        display:'flex',alignItems:'center',justifyContent:'center',
+        background:open?'var(--sf3)':'transparent',
+        border:'1px solid '+(open?'var(--bd)':'transparent'),
+        color:pwSuccess?'var(--gn)':'var(--tx3)',
+        transition:'all .15s'}}
+      onMouseEnter={e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.borderColor='var(--bd)';}}
+      onMouseLeave={e=>{if(!open){e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent';}}}>
+      {pwSuccess?'✓':'⚙'}
+    </button>
+    {open&&<div style={{position:'absolute',right:0,top:'calc(100% + 6px)',
+      background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:9,
+      boxShadow:'0 8px 32px rgba(0,0,0,.5)',zIndex:300,minWidth:180,overflow:'hidden'}}>
+      <button onClick={()=>{setOpen(false);onChangePw();}}
+        style={{display:'block',width:'100%',padding:'11px 16px',fontSize:13,
+          color:'var(--tx)',textAlign:'left'}}>
+        🔑 Change Password
+      </button>
+      <div style={{height:1,background:'var(--bd)'}}/>
+      <button onClick={()=>{setOpen(false);onSignOut();}}
+        style={{display:'block',width:'100%',padding:'11px 16px',fontSize:13,
+          color:'var(--tx)',textAlign:'left'}}>
+        Sign Out
+      </button>
+      <div style={{height:1,background:'var(--bd)'}}/>
+      <button onClick={()=>{setOpen(false);setShowDel(true);}}
+        style={{display:'block',width:'100%',padding:'11px 16px',fontSize:13,
+          color:'var(--rd)',textAlign:'left'}}>
+        Delete Account
+      </button>
+    </div>}
+    {showDel&&<DeleteAccountModal user={user} rowId={rowId}
+      onClose={()=>setShowDel(false)}
+      onDeleted={()=>{setShowDel(false);onSignOut();}}/>}
+  </div>;
+}
 function DisplayName({user,onUpdate}){
   const [editing,setEditing]=useState(false);
   const [val,setVal]=useState('');
@@ -1557,7 +1841,7 @@ function DisplayName({user,onUpdate}){
 }
 
 /* ── TRIP HEADER ─────────────────────────────────────────────────── */
-function TripHeader({trip,onHome,onRename,onSignOut,user,onUpdateUser,onSaveTemplate,onApplyTemplate,saveStatus,view,onView}){
+function TripHeader({trip,onHome,onRename,onSignOut,onChangePw,onDeleteAccount,rowId,pwSuccess,user,onUpdateUser,onSaveTemplate,onApplyTemplate,saveStatus,view,onView}){
   const [editing,setEditing]=useState(false);
   const [val,setVal]=useState('');
   const [mobileMenu,setMobileMenu]=useState(false);
@@ -1626,9 +1910,8 @@ function TripHeader({trip,onHome,onRename,onSignOut,user,onUpdateUser,onSaveTemp
         background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--am)'}}>+ Save Template</button>
       <div style={{width:1,height:20,background:'var(--bd)'}}/>
       <SaveIndicator status={saveStatus}/>
-      <DisplayName user={user} onUpdate={onUpdateUser}/>
-      <button onClick={onSignOut} style={{fontSize:12,color:'var(--tx3)',padding:'5px 10px',
-        borderRadius:6,border:'1px solid var(--bd)',background:'var(--sf2)',flexShrink:0}}>Sign out</button>
+      <UserMenu user={user} rowId={rowId} onUpdate={onUpdateUser}
+        onChangePw={onChangePw} onSignOut={onSignOut} pwSuccess={pwSuccess}/>
     </div>
 
     {/* Mobile overflow menu */}
@@ -1658,10 +1941,21 @@ function TripHeader({trip,onHome,onRename,onSignOut,user,onUpdateUser,onSaveTemp
           </button>
         ))}
         <div style={{height:1,background:'var(--bd)'}}/>
+        <button onClick={()=>{onChangePw();setMobileMenu(false);}}
+          style={{display:'block',width:'100%',padding:'11px 14px',fontSize:13,
+            color:'var(--tx)',textAlign:'left'}}>
+          {pwSuccess?'✓ Password Updated':'🔑 Change Password'}
+        </button>
         <button onClick={()=>{onSignOut();setMobileMenu(false);}}
           style={{display:'block',width:'100%',padding:'11px 14px',fontSize:13,
+            color:'var(--tx)',textAlign:'left'}}>
+          Sign Out
+        </button>
+        <div style={{height:1,background:'var(--bd)'}}/>
+        <button onClick={()=>{setMobileMenu(false);onDeleteAccount();}}
+          style={{display:'block',width:'100%',padding:'11px 14px',fontSize:13,
             color:'var(--rd)',textAlign:'left'}}>
-          Sign out
+          Delete Account
         </button>
       </div>}
     </div>
@@ -2198,7 +2492,7 @@ function TripCard({t,isOver,isRenaming,renamingId,renameVal,setRenamingId,setRen
   saveRename,onSelect,onDuplicate,onDelete,confirm,fmt,tripDrag}){
   const fromHandle=useRef(false);
   const tot=t.assignments.reduce((s,a)=>s+a.quantity,0);
-  const pk=t.assignments.filter(a=>a.packed).reduce((s,a)=>s+a.quantity,0);
+  const pk=t.assignments.reduce((s,a)=>s+getPackedQty(a),0);
   const pct=tot>0?(pk/tot)*100:0;
   return <React.Fragment>
     {isOver&&<div style={{height:3,borderRadius:2,background:'var(--am)',margin:'4px 0'}}/>}
@@ -2704,7 +2998,10 @@ function App(){
   const [drawerItem,setDrawerItem]=useState(null);
   const [pickerLoc,setPickerLoc]=useState(null);
   const [modal,setModal]=useState(null);
-  const [saveStatus,setSaveStatus]=useState('idle'); // idle | saving | saved | error
+  const [saveStatus,setSaveStatus]=useState('idle');
+  const [showChangePw,setShowChangePw]=useState(false);
+  const [pwSuccess,setPwSuccess]=useState(false);
+  const [showDeleteAccount,setShowDeleteAccount]=useState(false); // idle | saving | saved | error
   const loaded=useRef(false);
   const saveTimer=useRef(null);
   const lastSaved=useRef(null); // JSON snapshot of last successfully saved data
@@ -2831,11 +3128,11 @@ function App(){
   const setLocBagWeight=(id,bagWeight)=>mut(t=>({...t,locations:t.locations.map(l=>l.id===id?{...l,bagWeight}:l)}));
   const setLocWeightLimit=(id,weightLimit)=>mut(t=>({...t,locations:t.locations.map(l=>l.id===id?{...l,weightLimit}:l)}));
   const delItem=id=>mut(t=>({...t,items:t.items.filter(i=>i.id!==id),assignments:t.assignments.filter(a=>a.itemId!==id)}));
-  const resetPacked=()=>mut(t=>({...t,assignments:t.assignments.map(a=>({...a,packed:false}))}));
+  const resetPacked=()=>mut(t=>({...t,assignments:t.assignments.map(a=>({...a,packed:false,packedQty:0}))}));
   const packAllInLoc=locId=>mut(t=>({...t,assignments:t.assignments.map(a=>
-    a.locationId===locId?{...a,packed:true}:a)}));
+    a.locationId===locId?{...a,packed:true,packedQty:a.quantity}:a)}));
   const unpackAllInLoc=locId=>mut(t=>({...t,assignments:t.assignments.map(a=>
-    a.locationId===locId?{...a,packed:false}:a)}));
+    a.locationId===locId?{...a,packed:false,packedQty:0}:a)}));
   const reorderAssignment=(locationId,fromId,toId)=>mut(t=>{
     const all=[...t.assignments];
     const fi=all.findIndex(a=>a.id===fromId);
@@ -2948,10 +3245,20 @@ function App(){
     if(quantity<=0)return{...t,assignments:t.assignments.filter(a=>!(a.itemId===itemId&&a.locationId===locationId))};
     const ex=t.assignments.find(a=>a.itemId===itemId&&a.locationId===locationId);
     if(ex)return{...t,assignments:t.assignments.map(a=>a.itemId===itemId&&a.locationId===locationId?{...a,quantity}:a)};
-    return{...t,assignments:[...t.assignments,{id:genId(),itemId,locationId,quantity,packed:false}]};
+    return{...t,assignments:[...t.assignments,{id:genId(),itemId,locationId,quantity,packed:false,packedQty:0}]};
   });
   const togPacked=(itemId,locationId)=>mut(t=>({...t,
-    assignments:t.assignments.map(a=>a.itemId===itemId&&a.locationId===locationId?{...a,packed:!a.packed}:a)}));
+    assignments:t.assignments.map(a=>{
+      if(a.itemId!==itemId||a.locationId!==locationId)return a;
+      const full=isFullyPacked(a);
+      return full?{...a,packed:false,packedQty:0}:{...a,packed:true,packedQty:a.quantity};
+    })}));
+  const setAssignPackedQty=(itemId,locationId,qty)=>mut(t=>({...t,
+    assignments:t.assignments.map(a=>{
+      if(a.itemId!==itemId||a.locationId!==locationId)return a;
+      const clamped=Math.max(0,Math.min(qty,a.quantity));
+      return{...a,packedQty:clamped,packed:clamped>=a.quantity};
+    })}));
 
   const goHome=()=>{setScreen('home');setDrawerItem(null);setPickerLoc(null);};
   const openTrip=id=>{setActiveId(id);setScreen('trip');setDrawerItem(null);setPickerLoc(null);setView('board');};
@@ -2981,12 +3288,18 @@ function App(){
         <div className="bb" style={{fontSize:24,color:'var(--am)',letterSpacing:3,flexShrink:0}}>PACKR</div>
         <div style={{flex:1,minWidth:0}}/>
         <SaveIndicator status={saveStatus}/>
-        <DisplayName user={user} onUpdate={u=>setUser(u)}/>
-        <button onClick={signOut} style={{fontSize:12,color:'var(--tx3)',padding:'5px 10px',
-          borderRadius:6,border:'1px solid var(--bd)',background:'var(--sf2)',flexShrink:0,whiteSpace:'nowrap'}}>
-          Sign out
-        </button>
+        <UserMenu user={user} rowId={rowId} onUpdate={u=>setUser(u)}
+          onChangePw={()=>setShowChangePw(true)}
+          onSignOut={signOut}
+          pwSuccess={pwSuccess}/>
       </div>
+      {showChangePw&&<ChangePasswordModal onClose={result=>{
+        setShowChangePw(false);
+        if(result==='success'){setPwSuccess(true);setTimeout(()=>setPwSuccess(false),3000);}
+      }}/>}
+      {showDeleteAccount&&<DeleteAccountModal user={user} rowId={rowId}
+        onClose={()=>setShowDeleteAccount(false)}
+        onDeleted={signOut}/>}
       <HomeScreen trips={trips} templates={templates} onCreate={addTrip} onSelect={openTrip}
         onDelete={delTrip} onRename={renameTrip} onDuplicate={duplicateTrip}
         onReorderTrips={reorderTrips}
@@ -3011,7 +3324,10 @@ function App(){
     {screen==='trip'&&trip&&<>
       <TripHeader trip={trip} onHome={goHome}
         onRename={name=>renameTrip(activeId,name)}
-        onSignOut={signOut} user={user} onUpdateUser={u=>setUser(u)}
+        onSignOut={signOut} onChangePw={()=>setShowChangePw(true)}
+        onDeleteAccount={()=>setShowDeleteAccount(true)}
+        rowId={rowId} pwSuccess={pwSuccess}
+        user={user} onUpdateUser={u=>setUser(u)}
         onSaveTemplate={()=>setModal({type:'save-template'})}
         onApplyTemplate={()=>setModal({type:'apply-template'})}
         saveStatus={saveStatus}
@@ -3019,7 +3335,8 @@ function App(){
       {view==='board'
         ?<Board trip={trip}
             onAdd={id=>setPickerLoc(id)}
-            onToggle={togPacked} onQty={setAssign}
+            onQty={setAssign}
+            onSetPackedQty={setAssignPackedQty}
             onOpen={id=>setDrawerItem(id)}
             onAddLoc={()=>setModal({type:'add-loc'})}
             onRenameLoc={id=>setModal({type:'rename-loc',id})}
@@ -3075,6 +3392,13 @@ function App(){
       })()}
       {modal?.type==='save-template'&&trip&&
         <SaveTemplateModal trip={trip} onClose={()=>setModal(null)} onSave={saveTemplate}/>}
+      {showChangePw&&<ChangePasswordModal onClose={result=>{
+        setShowChangePw(false);
+        if(result==='success'){setPwSuccess(true);setTimeout(()=>setPwSuccess(false),3000);}
+      }}/>}
+      {showDeleteAccount&&<DeleteAccountModal user={user} rowId={rowId}
+        onClose={()=>setShowDeleteAccount(false)}
+        onDeleted={signOut}/>}
       {modal?.type==='apply-template'&&trip&&
         <ApplyTemplateModal templates={templates} trip={trip}
           onClose={()=>setModal(null)} onApply={applyTemplate}
