@@ -289,6 +289,11 @@ function Veil({onClick,alpha=.55}){
 }
 
 function Modal({title,onClose,children,w=380}){
+  useEffect(()=>{
+    const fn=e=>{if(e.key==='Escape')onClose();};
+    document.addEventListener('keydown',fn);
+    return()=>document.removeEventListener('keydown',fn);
+  },[onClose]);
   return <>
     <Veil onClick={onClose}/>
     <div style={{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
@@ -305,6 +310,11 @@ function Modal({title,onClose,children,w=380}){
 }
 
 function Confirm({message,onConfirm,onCancel,danger=true}){
+  useEffect(()=>{
+    const fn=e=>{if(e.key==='Escape')onCancel();};
+    document.addEventListener('keydown',fn);
+    return()=>document.removeEventListener('keydown',fn);
+  },[onCancel]);
   return <>
     <Veil onClick={onCancel} alpha={.6}/>
     <div style={{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
@@ -618,19 +628,7 @@ function LocCol({loc,items,assignments,onAdd,onQty,onSetPackedQty,onOpen,onRenam
   const withItem=la.map(a=>({...a,item:items.find(i=>i.id===a.itemId)}));
   const unpackedRows=withItem.filter(a=>!isConsideredPacked(a));
   const packedRows=withItem.filter(a=>isConsideredPacked(a));
-  const sortedAssign=(rows)=>{
-    if(sort==='personal')return rows;
-    return [...rows].sort((a,b)=>{
-      const na=a.item?.name||'';const nb=b.item?.name||'';
-      const wa=a.item?.weight??200;const wb=b.item?.weight??200;
-      if(sort==='az')return na.localeCompare(nb);
-      if(sort==='za')return nb.localeCompare(na);
-      if(sort==='asc')return wa-wb;
-      if(sort==='desc')return wb-wa;
-      return 0;
-    });
-  };
-  const sorted=[...sortedAssign(unpackedRows),...sortedAssign(packedRows)];
+  const sorted=[...sortAssignRows(unpackedRows,sort),...sortAssignRows(packedRows,sort)];
 
   const bagW = loc.bagWeight ?? 0;
   const contentsW = withItem.reduce((s,a)=>s+(a.item?.weight??200)*a.quantity, 0);
@@ -1091,12 +1089,12 @@ const SORT_OPTS=[
   {v:'desc',l:'Heaviest first'},
 ];
 
-// Sort an array of assignment rows within a group (preserves group boundary)
-const sortAssignRows=(rows,sort)=>{
-  if(sort==='personal')return rows;
-  return [...rows].sort((a,b)=>{
-    const na=a.item?.name||'';const nb=b.item?.name||'';
-    const wa=a.item?.weight??200;const wb=b.item?.weight??200;
+// Generic sort base — takes field accessor functions
+const sortBy=(arr,sort,getName,getWeight)=>{
+  if(sort==='personal')return arr;
+  return[...arr].sort((a,b)=>{
+    const na=getName(a),nb=getName(b);
+    const wa=getWeight(a),wb=getWeight(b);
     if(sort==='az')return na.localeCompare(nb);
     if(sort==='za')return nb.localeCompare(na);
     if(sort==='asc')return wa-wb;
@@ -1105,17 +1103,11 @@ const sortAssignRows=(rows,sort)=>{
   });
 };
 
-// Sort items (not assignments) within a group
-const sortItems=(items,sort)=>{
-  if(sort==='personal')return items;
-  return [...items].sort((a,b)=>{
-    if(sort==='az')return a.name.localeCompare(b.name);
-    if(sort==='za')return b.name.localeCompare(a.name);
-    if(sort==='asc')return (a.weight??200)-(b.weight??200);
-    if(sort==='desc')return (b.weight??200)-(a.weight??200);
-    return 0;
-  });
-};
+// Sort assignment rows — item details via .item reference (board / summary)
+const sortAssignRows=(rows,sort)=>sortBy(rows,sort,a=>a.item?.name||'',a=>a.item?.weight??200);
+
+// Sort plain item objects (grid summary)
+const sortItems=(items,sort)=>sortBy(items,sort,a=>a.name,a=>a.weight??200);
 
 function SortControl({value,onChange}){
   return <div style={{display:'flex',alignItems:'center',gap:6}}>
@@ -1508,7 +1500,7 @@ function BagWeightModal({loc,onClose,onSave}){
   const [val,setVal]=useState(String(loc?.bagWeight??0));
   const iRef=useRef();
   useEffect(()=>{iRef.current?.focus();iRef.current?.select();},[]);
-  const save=()=>{const v=parseInt(val);if(!isNaN(v)&&v>=0)onSave(v);else onClose();};
+  const save=()=>{const v=parseInt(val);onSave(!isNaN(v)&&v>=0?v:0);};
   return <Modal title={`Bag Weight — ${loc?.name}`} onClose={onClose}>
     <div style={{fontSize:12,color:'var(--tx2)',marginBottom:10}}>
       Tare weight of the empty bag itself (grams). This is added to the contents weight to give the total load.
@@ -1554,8 +1546,7 @@ function Board({trip,onAdd,onQty,onSetPackedQty,onOpen,onAddLoc,onRenameLoc,onSe
     <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',
       padding:'5px 12px',borderBottom:'1px solid var(--bd)',flexShrink:0,gap:8}} className="np">
       <SortControl value={sort} onChange={setSort}/>
-      {sort!=='personal'&&<span style={{fontSize:11,color:'var(--tx3)',
-        display:'none'}} className="sort-hint">
+      {sort!=='personal'&&<span style={{fontSize:11,color:'var(--tx3)'}} className="sort-hint">
         Drag unavailable when sorted
       </span>}
     </div>
@@ -1737,9 +1728,8 @@ function DeleteAccountModal({onClose,onDeleted}){
 }
 
 /* ── USER MENU (cog) ─────────────────────────────────────────────── */
-function UserMenu({user,rowId,onUpdate,onChangePw,onSignOut,pwSuccess}){
+function UserMenu({user,onUpdate,onChangePw,onSignOut,onDeleteAccount,pwSuccess}){
   const [open,setOpen]=useState(false);
-  const [showDel,setShowDel]=useState(false);
   const ref=useRef();
   useEffect(()=>{
     if(!open)return;
@@ -1777,15 +1767,12 @@ function UserMenu({user,rowId,onUpdate,onChangePw,onSignOut,pwSuccess}){
         Sign Out
       </button>
       <div style={{height:1,background:'var(--bd)'}}/>
-      <button onClick={()=>{setOpen(false);setShowDel(true);}}
+      <button onClick={()=>{setOpen(false);onDeleteAccount();}}
         style={{display:'block',width:'100%',padding:'11px 16px',fontSize:13,
           color:'var(--rd)',textAlign:'left'}}>
         Delete Account
       </button>
     </div>}
-    {showDel&&<DeleteAccountModal user={user} rowId={rowId}
-      onClose={()=>setShowDel(false)}
-      onDeleted={()=>{setShowDel(false);onSignOut();}}/>}
   </div>;
 }
 function DisplayName({user,onUpdate}){
@@ -1841,7 +1828,7 @@ function DisplayName({user,onUpdate}){
 }
 
 /* ── TRIP HEADER ─────────────────────────────────────────────────── */
-function TripHeader({trip,onHome,onRename,onSignOut,onChangePw,onDeleteAccount,rowId,pwSuccess,user,onUpdateUser,onSaveTemplate,onApplyTemplate,saveStatus,view,onView}){
+function TripHeader({trip,onHome,onRename,onSignOut,onChangePw,onDeleteAccount,pwSuccess,user,onUpdateUser,onSaveTemplate,onApplyTemplate,saveStatus,view,onView}){
   const [editing,setEditing]=useState(false);
   const [val,setVal]=useState('');
   const [mobileMenu,setMobileMenu]=useState(false);
@@ -1910,8 +1897,9 @@ function TripHeader({trip,onHome,onRename,onSignOut,onChangePw,onDeleteAccount,r
         background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--am)'}}>+ Save Template</button>
       <div style={{width:1,height:20,background:'var(--bd)'}}/>
       <SaveIndicator status={saveStatus}/>
-      <UserMenu user={user} rowId={rowId} onUpdate={onUpdateUser}
-        onChangePw={onChangePw} onSignOut={onSignOut} pwSuccess={pwSuccess}/>
+      <UserMenu user={user} onUpdate={onUpdateUser}
+        onChangePw={onChangePw} onSignOut={onSignOut}
+        onDeleteAccount={onDeleteAccount} pwSuccess={pwSuccess}/>
     </div>
 
     {/* Mobile overflow menu */}
@@ -2207,8 +2195,6 @@ function TemplateCard({tpl,trips,sort='personal',dragHandle,onRename,onRemoveIte
 
   const handleApply=e=>{e.stopPropagation();setPickingTrip(true);setCreatingNew(false);setNewTripName('');};
 
-  const [noTripsMsg,setNoTripsMsg]=useState(false);
-
   // Adding items: which location is currently open for adding
   const [adding,setAdding]=useState(null); // locName | null
   const [pickingLoc,setPickingLoc]=useState(false);
@@ -2247,7 +2233,6 @@ function TemplateCard({tpl,trips,sort='personal',dragHandle,onRename,onRemoveIte
                 background:'var(--am)',color:'#1a0e00',border:'none'}}>
               Apply
             </button>
-            {noTripsMsg&&<span style={{fontSize:10,color:'var(--rd)',whiteSpace:'nowrap'}}>Create a trip first</span>}
           </div>
           <button onClick={e=>{e.stopPropagation();onDuplicate();}}
             title="Duplicate" style={{color:'var(--tx3)',fontSize:13,padding:'4px 8px',borderRadius:5,flexShrink:0}}
@@ -2283,13 +2268,7 @@ function TemplateCard({tpl,trips,sort='personal',dragHandle,onRename,onRemoveIte
         onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget)){setDragOverIdx(null);dragOverRef.current=null;}}}>
 
         {Object.entries(byLoc).map(([locName,items])=>{
-          const sortedItems = sort==='personal' ? items : [...items].sort((a,b)=>{
-            if(sort==='az') return a.itemName.localeCompare(b.itemName);
-            if(sort==='za') return b.itemName.localeCompare(a.itemName);
-            if(sort==='asc') return (a.itemWeight??200)-(b.itemWeight??200);
-            if(sort==='desc') return (b.itemWeight??200)-(a.itemWeight??200);
-            return 0;
-          });
+          const sortedItems=sortBy(items,sort,a=>a.itemName,a=>a.itemWeight??200);
           return (<div key={locName}>
             {renamingLoc===locName
               ?<div style={{display:'flex',gap:6,marginBottom:6}} onClick={e=>e.stopPropagation()}>
@@ -2871,6 +2850,112 @@ function ApplyTemplateModal({templates,trip,onClose,onApply,onCreateAndApply}){
   </Modal>;
 }
 
+/* ── APPLY WARNING MODAL ─────────────────────────────────────────── */
+function ApplyWarningModal({conflicts,onClose}){
+  return <Modal title="Template Applied" onClose={onClose}>
+    <div style={{fontSize:13,color:'var(--tx2)',marginBottom:14,lineHeight:1.6}}>
+      {conflicts.length} item{conflicts.length!==1?'s':''} already existed in this trip with different
+      details. {conflicts.length!==1?'Their existing weights and categories were':'Its existing weight and category was'} kept —
+      the template values below were ignored.
+    </div>
+    <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16}}>
+      {conflicts.map(c=>(
+        <div key={c.name} style={{background:'var(--sf2)',borderRadius:7,padding:'9px 12px'}}>
+          <div style={{fontWeight:600,fontSize:13,color:'var(--tx)',marginBottom:4}}>{c.name}</div>
+          <div style={{display:'flex',flexDirection:'column',gap:2}}>
+            {c.weightMismatch&&<div style={{fontSize:11,color:'var(--tx3)'}}>
+              Weight: <span style={{color:'var(--tx)'}}>{fmtW(c.tripWeight)}</span> kept
+              <span> · template had {fmtW(c.tplWeight)}</span>
+            </div>}
+            {c.catMismatch&&<div style={{fontSize:11,color:'var(--tx3)'}}>
+              Category: <span style={{color:'var(--tx)'}}>{c.tripCat}</span> kept
+              <span> · template had {c.tplCat}</span>
+            </div>}
+          </div>
+        </div>
+      ))}
+    </div>
+    <div style={{fontSize:11,color:'var(--tx3)',marginBottom:16,lineHeight:1.5}}>
+      To update these items to match the template, edit them directly on the board.
+    </div>
+    <button onClick={onClose} style={{width:'100%',padding:'10px',borderRadius:7,
+      background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:13}}>Got it</button>
+  </Modal>;
+}
+
+/* ── RECOVERY SCREEN (password reset via email link) ─────────────── */
+function RecoveryScreen({onDone}){
+  const [pw,setPw]=useState('');
+  const [confirm,setConfirm]=useState('');
+  const [status,setStatus]=useState(''); // '' | 'saving' | 'success'
+  const [errMsg,setErrMsg]=useState('');
+  const ref=useRef();
+  useEffect(()=>{ref.current?.focus();},[]);
+
+  const save=async()=>{
+    if(!pw||pw.length<6){setErrMsg('Password must be at least 6 characters.');return;}
+    if(pw!==confirm){setErrMsg('Passwords do not match.');return;}
+    setStatus('saving');setErrMsg('');
+    try{
+      const{error}=await sb.auth.updateUser({password:pw});
+      if(error)throw error;
+      setStatus('success');
+      setTimeout(()=>onDone(),1500);
+    }catch(e){
+      setErrMsg(e.message||'Something went wrong.');
+      setStatus('');
+    }
+  };
+
+  return <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',
+    padding:40,paddingBottom:'calc(40px + env(safe-area-inset-bottom))'}}>
+    <div style={{width:340}}>
+      <div className="bb" style={{fontSize:76,color:'var(--am)',letterSpacing:6,lineHeight:1,
+        marginBottom:8,textAlign:'center'}}>PACKR</div>
+      <div style={{fontSize:14,color:'var(--tx2)',marginBottom:48,letterSpacing:.5,textAlign:'center'}}>
+        Set your new password
+      </div>
+      <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:24}}>
+        {status==='success'
+          ?<div style={{textAlign:'center',padding:'20px 0'}}>
+              <div style={{fontSize:40,marginBottom:12,color:'var(--gn)'}}>✓</div>
+              <div style={{fontSize:15,fontWeight:700,color:'var(--gn)'}}>Password updated!</div>
+              <div style={{fontSize:12,color:'var(--tx3)',marginTop:6}}>Taking you to your trips…</div>
+            </div>
+          :<div style={{display:'flex',flexDirection:'column',gap:12}}>
+              <div>
+                <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,
+                  textTransform:'uppercase',letterSpacing:.7}}>New Password</div>
+                <input ref={ref} type="password" value={pw} onChange={e=>setPw(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&save()}
+                  style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+                    borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
+              </div>
+              <div>
+                <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,
+                  textTransform:'uppercase',letterSpacing:.7}}>Confirm Password</div>
+                <input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&save()}
+                  style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+                    borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
+              </div>
+              {errMsg&&<div style={{fontSize:12,color:'var(--rd)',padding:'8px 10px',
+                background:'rgba(240,82,82,.08)',borderRadius:6,border:'1px solid rgba(240,82,82,.2)'}}>
+                {errMsg}
+              </div>}
+              <button onClick={save} disabled={status==='saving'}
+                style={{width:'100%',padding:'11px',borderRadius:8,background:'var(--am)',
+                  color:'#1a0e00',fontWeight:700,fontSize:14,
+                  opacity:status==='saving'?'.6':'1'}}>
+                {status==='saving'?'Updating…':'Set New Password'}
+              </button>
+            </div>
+        }
+      </div>
+    </div>
+  </div>;
+}
+
 /* ── LOADING SCREEN ──────────────────────────────────────────────── */
 function LoadingScreen({message='Loading…'}){
   return <div style={{display:'flex',flexDirection:'column',height:'100%',
@@ -2909,7 +2994,9 @@ function AuthScreen(){
   const forgotPassword=async()=>{
     if(!email){setError('Enter your email address above first.');return;}
     setLoading(true);setError('');
-    const{error:e}=await sb.auth.resetPasswordForEmail(email);
+    // redirectTo sends the user back to this exact page after clicking the email link
+    const redirectTo=window.location.href.split('#')[0];
+    const{error:e}=await sb.auth.resetPasswordForEmail(email,{redirectTo});
     setLoading(false);
     if(e)setError(e.message);
     else setMessage('Password reset email sent — check your inbox.');
@@ -2938,17 +3025,17 @@ function AuthScreen(){
         </div>
 
         <div style={{marginBottom:12}}>
-          <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,
-            textTransform:'uppercase',letterSpacing:.7}}>Email</div>
-          <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+          <label htmlFor="auth-email" style={{display:'block',fontSize:11,color:'var(--tx3)',marginBottom:5,
+            textTransform:'uppercase',letterSpacing:.7}}>Email</label>
+          <input id="auth-email" type="email" value={email} onChange={e=>setEmail(e.target.value)}
             onKeyDown={e=>e.key==='Enter'&&pwRef.current?.focus()} autoFocus
             style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
               borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
         </div>
         <div style={{marginBottom:8}}>
-          <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,
-            textTransform:'uppercase',letterSpacing:.7}}>Password</div>
-          <input ref={pwRef} type="password" value={password} onChange={e=>setPassword(e.target.value)}
+          <label htmlFor="auth-password" style={{display:'block',fontSize:11,color:'var(--tx3)',marginBottom:5,
+            textTransform:'uppercase',letterSpacing:.7}}>Password</label>
+          <input id="auth-password" ref={pwRef} type="password" value={password} onChange={e=>setPassword(e.target.value)}
             onKeyDown={e=>e.key==='Enter'&&handle()}
             style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
               borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
@@ -3001,18 +3088,23 @@ function App(){
   const [saveStatus,setSaveStatus]=useState('idle');
   const [showChangePw,setShowChangePw]=useState(false);
   const [pwSuccess,setPwSuccess]=useState(false);
-  const [showDeleteAccount,setShowDeleteAccount]=useState(false); // idle | saving | saved | error
+  const [showDeleteAccount,setShowDeleteAccount]=useState(false); // boolean — controls delete account modal visibility
+  const [recoveryMode,setRecoveryMode]=useState(false); // true when user arrives via password reset email link
+  const [applyWarning,setApplyWarning]=useState(null); // conflicts from template apply, or null
   const loaded=useRef(false);
   const saveTimer=useRef(null);
   const lastSaved=useRef(null); // JSON snapshot of last successfully saved data
 
   useEffect(()=>{
-    sb.auth.getSession().then(({data:{session}})=>{
+    // Supabase v2: onAuthStateChange fires INITIAL_SESSION immediately — no need for getSession()
+    const{data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
       setUser(session?.user??null);
-      setAuthLoading(false);
-    });
-    const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{
-      setUser(session?.user??null);
+      if(event==='INITIAL_SESSION') setAuthLoading(false);
+      if(event==='PASSWORD_RECOVERY'){
+        setRecoveryMode(true);
+        // Clean the token hash from the URL so a refresh doesn't re-trigger recovery
+        window.history.replaceState(null,'',window.location.pathname+window.location.search);
+      }
     });
     return()=>subscription.unsubscribe();
   },[]);
@@ -3061,9 +3153,10 @@ function App(){
       }catch(e){
         console.error('Save failed:',e);
         setSaveStatus('error');
+        setTimeout(()=>setSaveStatus('idle'),4000);
       }
     },3000); // 3s debounce — imperceptible for packing, halves write frequency vs 1.5s
-  },[trips,templates]);
+  },[trips,templates,rowId,user]);
 
   const signOut=()=>{
     sb.auth.signOut();
@@ -3100,7 +3193,7 @@ function App(){
       ...a,id:genId(),
       itemId:itemIdMap[a.itemId]||a.itemId,
       locationId:idMap[a.locationId]||a.locationId,
-      packed:false,
+      packed:false,packedQty:0,
     }));
     const dup={...src,id:genId(),name:src.name+' (copy)',createdAt:Date.now(),
       locations:newLocs,items:newItems,assignments:newAssignments};
@@ -3205,6 +3298,22 @@ function App(){
     const tpl=templates.find(t=>t.id===templateId);
     const tid=targetTripId||activeId;
     if(!tpl||!tid)return;
+    // Detect mismatches before applying — items that exist with different weight or category
+    const targetTrip=trips.find(t=>t.id===tid);
+    const conflicts=[];
+    if(targetTrip){
+      tpl.assignments.forEach(({itemName,itemCategory,itemWeight})=>{
+        const existing=targetTrip.items.find(i=>i.name.toLowerCase()===itemName.toLowerCase());
+        if(!existing)return;
+        const weightMismatch=existing.weight!==itemWeight;
+        const catMismatch=normCat(existing.category)!==normCat(itemCategory);
+        if((weightMismatch||catMismatch)&&!conflicts.find(c=>c.name.toLowerCase()===itemName.toLowerCase())){
+          conflicts.push({name:existing.name,
+            tripWeight:existing.weight,tplWeight:itemWeight,weightMismatch,
+            tripCat:normCat(existing.category),tplCat:normCat(itemCategory),catMismatch});
+        }
+      });
+    }
     setTrips(ts=>ts.map(t=>{
       if(t.id!==tid)return t;
       let{items,locations,assignments}=t;
@@ -3214,10 +3323,11 @@ function App(){
         let item=items.find(i=>i.name.toLowerCase()===itemName.toLowerCase());
         if(!item){item={id:genId(),name:itemName,category:itemCategory,weight:itemWeight};items=[...items,item];}
         const exists=assignments.find(a=>a.itemId===item.id&&a.locationId===loc.id);
-        if(!exists)assignments=[...assignments,{id:genId(),itemId:item.id,locationId:loc.id,quantity,packed:false}];
+        if(!exists)assignments=[...assignments,{id:genId(),itemId:item.id,locationId:loc.id,quantity,packed:false,packedQty:0}];
       });
       return{...t,items,assignments};
     }));
+    if(conflicts.length>0)setApplyWarning(conflicts);
   };
 
   // Create a new trip and apply a template to it atomically, then navigate into it
@@ -3232,7 +3342,7 @@ function App(){
         let item=items.find(i=>i.name.toLowerCase()===itemName.toLowerCase());
         if(!item){item={id:genId(),name:itemName,category:itemCategory,weight:itemWeight};items=[...items,item];}
         const exists=assignments.find(a=>a.itemId===item.id&&a.locationId===loc.id);
-        if(!exists)assignments=[...assignments,{id:genId(),itemId:item.id,locationId:loc.id,quantity,packed:false}];
+        if(!exists)assignments=[...assignments,{id:genId(),itemId:item.id,locationId:loc.id,quantity,packed:false,packedQty:0}];
       });
       newTrip.items=items;newTrip.assignments=assignments;
     }
@@ -3266,6 +3376,9 @@ function App(){
   const pickerLocObj=trip?.locations.find(l=>l.id===pickerLoc);
 
   if(authLoading)return <LoadingScreen/>;
+  if(recoveryMode)return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)'}}>
+    <RecoveryScreen onDone={()=>setRecoveryMode(false)}/>
+  </div>;
   if(!user)return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)'}}><AuthScreen/></div>;
   if(dataLoading)return <LoadingScreen message="Loading your trips…"/>;
   if(loadError)return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)',
@@ -3288,16 +3401,17 @@ function App(){
         <div className="bb" style={{fontSize:24,color:'var(--am)',letterSpacing:3,flexShrink:0}}>PACKR</div>
         <div style={{flex:1,minWidth:0}}/>
         <SaveIndicator status={saveStatus}/>
-        <UserMenu user={user} rowId={rowId} onUpdate={u=>setUser(u)}
+        <UserMenu user={user} onUpdate={u=>setUser(u)}
           onChangePw={()=>setShowChangePw(true)}
           onSignOut={signOut}
+          onDeleteAccount={()=>setShowDeleteAccount(true)}
           pwSuccess={pwSuccess}/>
       </div>
       {showChangePw&&<ChangePasswordModal onClose={result=>{
         setShowChangePw(false);
         if(result==='success'){setPwSuccess(true);setTimeout(()=>setPwSuccess(false),3000);}
       }}/>}
-      {showDeleteAccount&&<DeleteAccountModal user={user} rowId={rowId}
+      {showDeleteAccount&&<DeleteAccountModal
         onClose={()=>setShowDeleteAccount(false)}
         onDeleted={signOut}/>}
       <HomeScreen trips={trips} templates={templates} onCreate={addTrip} onSelect={openTrip}
@@ -3326,7 +3440,7 @@ function App(){
         onRename={name=>renameTrip(activeId,name)}
         onSignOut={signOut} onChangePw={()=>setShowChangePw(true)}
         onDeleteAccount={()=>setShowDeleteAccount(true)}
-        rowId={rowId} pwSuccess={pwSuccess}
+        pwSuccess={pwSuccess}
         user={user} onUpdateUser={u=>setUser(u)}
         onSaveTemplate={()=>setModal({type:'save-template'})}
         onApplyTemplate={()=>setModal({type:'apply-template'})}
@@ -3396,7 +3510,7 @@ function App(){
         setShowChangePw(false);
         if(result==='success'){setPwSuccess(true);setTimeout(()=>setPwSuccess(false),3000);}
       }}/>}
-      {showDeleteAccount&&<DeleteAccountModal user={user} rowId={rowId}
+      {showDeleteAccount&&<DeleteAccountModal
         onClose={()=>setShowDeleteAccount(false)}
         onDeleted={signOut}/>}
       {modal?.type==='apply-template'&&trip&&
@@ -3404,6 +3518,7 @@ function App(){
           onClose={()=>setModal(null)} onApply={applyTemplate}
           onCreateAndApply={(tplId,name)=>createTripAndApply(tplId,name)}/>}
     </>}
+    {applyWarning&&<ApplyWarningModal conflicts={applyWarning} onClose={()=>setApplyWarning(null)}/>}
   </div>;
 }
 
