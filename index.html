@@ -971,13 +971,18 @@ function CategoryPills({value,onChange}){
   </div>;
 }
 
-function Picker({items,assignments,locId,loc,onClose,onSelect,onCreateAdd}){
+function Picker({items,assignments,locId,loc,onClose,onSelect,onMultiAdd,onCreateAdd}){
   const [q,setQ]=useState('');
   const [cat,setCat]=useState(null);
   const [name,setName]=useState('');
   const [newCat,setNewCat]=useState('Other');
   const [tab,setTab]=useState('pick');
+  const [multiSelect,setMultiSelect]=useState(false);
+  const [selected,setSelected]=useState(new Set());
   const qRef=useRef();
+  const longPressTimer=useRef(null);
+  const longPressActivated=useRef(false);
+
   useEffect(()=>{ qRef.current?.focus(); },[]);
 
   // Names already assigned to this column
@@ -1009,23 +1014,57 @@ function Picker({items,assignments,locId,loc,onClose,onSelect,onCreateAdd}){
     (acc[c]=acc[c]||[]).push(i);return acc;
   },{});
 
-  const handleSelect=item=>{
-    if(item._fromMaster){
-      onCreateAdd(item.name, item.category, item.weight);
-    } else {
-      onSelect(item.id);
+  const toggleSelected=(id)=>{
+    setSelected(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});
+  };
+
+  const exitMultiSelect=()=>{setMultiSelect(false);setSelected(new Set());};
+
+  const handleItemClick=(item)=>{
+    if(longPressActivated.current){longPressActivated.current=false;return;}
+    if(multiSelect){
+      toggleSelected(item.id);
+    }else{
+      if(item._fromMaster)onCreateAdd(item.name,item.category,item.weight);
+      else onSelect(item.id);
     }
   };
 
+  const startLongPress=(item)=>()=>{
+    longPressActivated.current=false;
+    longPressTimer.current=setTimeout(()=>{
+      longPressActivated.current=true;
+      setMultiSelect(true);
+      setSelected(new Set([item.id]));
+    },500);
+  };
+
+  const cancelLongPress=()=>{
+    if(longPressTimer.current){clearTimeout(longPressTimer.current);longPressTimer.current=null;}
+  };
+
+  const handleMultiAdd=()=>{
+    const selectedItems=[...selected].map(id=>allItems.find(i=>i.id===id)).filter(Boolean);
+    onMultiAdd(selectedItems);
+  };
+
   return <Modal title={`Add to ${loc.name}`} onClose={onClose} w={440}>
-    <div style={{display:'flex',gap:6,marginBottom:14}}>
-      {[['pick','Pick Item'],['new','New Item']].map(([v,l])=>(
-        <button key={v} onClick={()=>setTab(v)} style={{padding:'5px 16px',borderRadius:20,
-          fontSize:12,fontWeight:600,border:'none',
-          background:tab===v?'var(--am)':'var(--sf2)',color:tab===v?'#1a0e00':'var(--tx2)'}}>
-          {l}
-        </button>
-      ))}
+    <div style={{display:'flex',gap:6,marginBottom:14,alignItems:'center'}}>
+      <div style={{display:'flex',gap:6,flex:1}}>
+        {[['pick','Pick Item'],['new','New Item']].map(([v,l])=>(
+          <button key={v} onClick={()=>{setTab(v);exitMultiSelect();}} style={{padding:'5px 16px',borderRadius:20,
+            fontSize:12,fontWeight:600,border:'none',
+            background:tab===v?'var(--am)':'var(--sf2)',color:tab===v?'#1a0e00':'var(--tx2)'}}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {tab==='pick'&&<button onClick={()=>multiSelect?exitMultiSelect():setMultiSelect(true)}
+        style={{padding:'5px 12px',borderRadius:20,fontSize:12,fontWeight:600,border:'none',flexShrink:0,
+          background:multiSelect?'var(--sf3)':'var(--sf2)',
+          color:multiSelect?'var(--tx)':'var(--tx2)'}}>
+        {multiSelect?'Cancel':'Select'}
+      </button>}
     </div>
 
     {tab==='pick'&&<>
@@ -1033,7 +1072,7 @@ function Picker({items,assignments,locId,loc,onClose,onSelect,onCreateAdd}){
         style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
           borderRadius:7,padding:'8px 12px',color:'var(--tx)',outline:'none',marginBottom:8}}/>
       <CategoryFilter categories={categories} selected={cat} onSelect={c=>{setCat(c);}}/>
-      <div style={{maxHeight:310,overflowY:'auto',margin:'0 -24px',padding:'0 24px'}}>
+      <div style={{maxHeight:multiSelect?260:310,overflowY:'auto',margin:'0 -24px',padding:'0 24px'}}>
         {Object.entries(grouped).length===0
           ?<div style={{textAlign:'center',color:'var(--tx3)',padding:'24px 0',fontSize:13}}>
             {q||cat?'No matches — try clearing the filter':'All items already added to this location'}
@@ -1043,21 +1082,44 @@ function Picker({items,assignments,locId,loc,onClose,onSelect,onCreateAdd}){
               {!cat&&<div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',
                 letterSpacing:1,fontWeight:600,marginBottom:4}}>{c}</div>}
               {catItems.map(item=>(
-                <button key={item.id} onClick={()=>handleSelect(item)}
+                <button key={item.id}
+                  onClick={()=>handleItemClick(item)}
+                  onTouchStart={startLongPress(item)}
+                  onTouchEnd={cancelLongPress}
+                  onTouchMove={cancelLongPress}
+                  onContextMenu={e=>e.preventDefault()}
                   style={{display:'flex',alignItems:'center',width:'100%',
                     padding:'8px 10px',borderRadius:6,textAlign:'left',
-                    fontSize:13,color:'var(--tx)',marginBottom:2,background:'transparent',transition:'background .1s'}}
-                  onMouseEnter={e=>e.currentTarget.style.background='var(--sf2)'}
-                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                    fontSize:13,color:'var(--tx)',marginBottom:2,
+                    background:multiSelect&&selected.has(item.id)?'rgba(255,167,0,.08)':'transparent',
+                    transition:'background .1s'}}
+                  onMouseEnter={e=>{if(!(multiSelect&&selected.has(item.id)))e.currentTarget.style.background='var(--sf2)';}}
+                  onMouseLeave={e=>{e.currentTarget.style.background=multiSelect&&selected.has(item.id)?'rgba(255,167,0,.08)':'transparent';}}>
+                  {multiSelect&&<div style={{
+                    width:18,height:18,borderRadius:4,border:'2px solid',
+                    borderColor:selected.has(item.id)?'var(--am)':'var(--bd)',
+                    background:selected.has(item.id)?'var(--am)':'transparent',
+                    display:'flex',alignItems:'center',justifyContent:'center',
+                    marginRight:10,flexShrink:0,transition:'all .15s'}}>
+                    {selected.has(item.id)&&<span style={{color:'#1a0e00',fontSize:10,fontWeight:900,lineHeight:1}}>✓</span>}
+                  </div>}
                   <span style={{flex:1}}>{item.name}</span>
                   {item.weight&&<span style={{fontSize:11,color:'var(--tx3)',marginRight:8}}>{fmtW(item.weight)}</span>}
-                  <span style={{color:'var(--tx3)',fontSize:15}}>+</span>
+                  {!multiSelect&&<span style={{color:'var(--tx3)',fontSize:15}}>+</span>}
                 </button>
               ))}
             </div>
           ))
         }
       </div>
+      {multiSelect&&<div style={{paddingTop:10,borderTop:'1px solid var(--bd)',marginTop:4}}>
+        <button onClick={handleMultiAdd} disabled={selected.size===0}
+          style={{width:'100%',padding:'12px',borderRadius:8,
+            background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:14,
+            opacity:selected.size>0?1:.4,transition:'opacity .15s'}}>
+          {selected.size>0?`Add ${selected.size} item${selected.size!==1?'s':''}`:'Select items above'}
+        </button>
+      </div>}
     </>}
 
     {tab==='new'&&<div>
@@ -3478,11 +3540,33 @@ function App(){
         locId={pickerLoc} loc={pickerLocObj}
         onClose={()=>setPickerLoc(null)}
         onSelect={itemId=>{setAssign(itemId,pickerLoc,1);setPickerLoc(null);setDrawerItem(itemId);}}
+        onMultiAdd={selectedItems=>{
+          mut(t=>{
+            let{items:tripItems,assignments}=t;
+            selectedItems.forEach(item=>{
+              let tripItem;
+              if(item._fromMaster){
+                tripItem=tripItems.find(i=>i.name.toLowerCase()===item.name.toLowerCase());
+                if(!tripItem){
+                  tripItem={id:genId(),name:item.name,category:item.category||'Other',weight:item.weight||200};
+                  tripItems=[...tripItems,tripItem];
+                }
+              }else{
+                tripItem=tripItems.find(i=>i.id===item.id);
+              }
+              if(!tripItem)return;
+              const exists=assignments.find(a=>a.itemId===tripItem.id&&a.locationId===pickerLoc);
+              if(!exists)assignments=[...assignments,{id:genId(),itemId:tripItem.id,locationId:pickerLoc,quantity:1,packed:false,packedQty:0}];
+            });
+            return{...t,items:tripItems,assignments};
+          });
+          setPickerLoc(null);
+        }}
         onCreateAdd={(name,category,weight)=>{
           const nid=genId();
           mut(t=>({...t,
             items:[...t.items,{id:nid,name,category:category||'Other',weight:weight||200}],
-            assignments:[...t.assignments,{id:genId(),itemId:nid,locationId:pickerLoc,quantity:1,packed:false}],
+            assignments:[...t.assignments,{id:genId(),itemId:nid,locationId:pickerLoc,quantity:1,packed:false,packedQty:0}],
           }));
           setPickerLoc(null);setDrawerItem(nid);
         }}/>}
