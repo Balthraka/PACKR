@@ -1,0 +1,15 @@
+{
+  "name": "packr-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "node --test tests/api.test.mjs tests/migration.test.mjs tests/workerd.test.mjs tests/page.test.mjs",
+    "make-import": "node scripts/make-import.mjs",
+    "rehearse": "node scripts/rehearse-0002.mjs"
+  },
+  "devDependencies": {
+    "miniflare": "4.20260730.0",
+    "wrangler": "^4"
+  }
+}

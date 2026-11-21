@@ -1,0 +1,22 @@
+name = "packr-api"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+# No preview URLs: previews would expose the same database on extra public addresses.
+preview_urls = false
+
+# Free plan: one D1 database for Packr only.
+[[d1_databases]]
+binding = "DB"
+database_name = "packr"
+database_id = "3a2cb6ca-0e9e-47ef-8392-9ab58fcda6c5"
+migrations_dir = "migrations"
+
+[vars]
+# Private until the owner decides otherwise: unknown emails are refused. "true" opens sign-up.
+ALLOW_SIGNUPS = "false"
+# Comma-separated list of browser origins allowed to call the API.
+# http://localhost:8080 is for testing on your own computer: remove it before cutover.
+ALLOWED_ORIGINS = "https://balthraka.github.io"
+# Public OAuth client IDs (not secrets). Fill in after setup.
+GOOGLE_CLIENT_ID = "970644446622-o9q0heq11p08mktrkjja102ju66tdr25.apps.googleusercontent.com"
+MS_CLIENT_ID = ""

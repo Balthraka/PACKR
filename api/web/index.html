@@ -1,0 +1,3516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PACKR</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.15/babel.min.js" integrity="sha384-Ss/vAy5WJ/pgOuQj8fpWo8I/lIbCYJW0kNY8PbhsygEsxmwpdsXz47HC5+sIUypz" crossorigin="anonymous"></script>
+<script>if(window.name==="packr-ms"&&/id_token|error/.test(location.hash))window.stop();</script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1419;--sf:#192130;--sf2:#1f2b3e;--sf3:#283649;
+  --bd:#2b3c52;--tx:#ccd8e6;--tx2:#6e87a3;--tx3:#3e5572;
+  --am:#f5a623;--am-bg:rgba(245,166,35,.1);--gn:#3fd68a;--rd:#f05252;
+}
+html,body,#root{height:100%;background:var(--bg)}
+@supports (height:100dvh){html,body,#root{height:100dvh;}}
+body{font-family:'Outfit',sans-serif;color:var(--tx);font-size:14px;line-height:1.4;overflow:hidden}
+button{cursor:pointer;border:none;background:none;font-family:inherit;color:inherit;line-height:1}
+input,textarea{font-family:inherit;font-size:14px}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--sf3);border-radius:2px}
+.bb{font-family:'Bebas Neue',sans-serif;letter-spacing:1.5px}
+@keyframes chk{0%{transform:scale(1.5)}100%{transform:scale(1)}}
+@keyframes slR{from{transform:translateX(380px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fdModal{
+  from{opacity:0;transform:translate(-50%,-50%) scale(.96)}
+  to{opacity:1;transform:translate(-50%,-50%) scale(1)}
+}
+@keyframes fd{from{opacity:0}to{opacity:1}}
+
+/* ── BOARD MOBILE ── */
+.board-container{
+  display:flex;gap:16px;padding:16px;
+  overflow-x:auto;overflow-y:hidden;
+  align-items:stretch;flex:1;
+  -webkit-overflow-scrolling:touch;
+}
+.loc-col{
+  width:274px;flex-shrink:0;background:var(--sf);
+  border:1px solid var(--bd);border-radius:10px;
+  display:flex;flex-direction:column;height:100%;overflow:hidden;
+}
+.drawer-panel{
+  position:fixed;right:0;top:0;bottom:0;width:358px;
+  background:var(--sf);border-left:1px solid var(--bd);
+  z-index:201;display:flex;flex-direction:column;
+  animation:slR .25s ease;
+}
+/* desktop-only header buttons */
+.hdr-desktop{display:flex;align-items:center;gap:8px;}
+.hdr-mobile-menu{display:none;}
+.sort-hint{display:inline !important;}
+
+@media(max-width:768px){
+  .board-container{
+    padding:10px;gap:10px;
+    scroll-snap-type:x mandatory;
+    scroll-padding:10px;
+  }
+  .loc-col{
+    width:calc(100vw - 32px) !important;
+    min-width:calc(100vw - 32px);
+    scroll-snap-align:start;
+    scroll-snap-stop:always;
+  }
+  .drawer-panel{
+    width:100vw !important;
+    border-left:none !important;
+  }
+  .hdr-desktop{display:none !important;}
+  .hdr-mobile-menu{display:flex !important;align-items:center;gap:8px;}
+  .sort-hint{display:none !important;}
+  .board-add-loc{
+    min-width:calc(100vw - 32px) !important;
+    scroll-snap-align:start;
+  }
+  .mob-dots{display:flex !important;}
+}
+.mob-dots{display:none;}
+
+/* ── SAFE AREA (Android gesture bar / iPhone home indicator) ── */
+@supports (padding-bottom: env(safe-area-inset-bottom)){
+  .board-container{
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+  @media(max-width:768px){
+    .board-container{
+      padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    }
+    .mob-dots{
+      padding-bottom: calc(4px + env(safe-area-inset-bottom));
+    }
+  }
+  .drawer-panel-footer{
+    padding-bottom: calc(14px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media print{
+  .np{display:none!important}
+  html,body{overflow:visible!important;height:auto!important;background:white!important}
+  #root{height:auto!important;overflow:visible!important}
+  .print-scroll{overflow:visible!important;height:auto!important}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ── API (Cloudflare Worker) ─────────────────────────────────────────
+   Public identifiers only — no secrets live in this file. */
+const API_URL = 'https://packr-api.balthraka.workers.dev';
+const GOOGLE_CLIENT_ID = '970644446622-o9q0heq11p08mktrkjja102ju66tdr25.apps.googleusercontent.com';   // from Google Cloud OAuth client
+const MS_CLIENT_ID = '';       // from Microsoft Entra app registration
+
+const TOKEN_KEY='packr_token';
+const getToken=()=>{try{return localStorage.getItem(TOKEN_KEY);}catch{return null;}};
+const setToken=t=>{try{t?localStorage.setItem(TOKEN_KEY,t):localStorage.removeItem(TOKEN_KEY);}catch{}};
+class ApiError extends Error{constructor(status,code,body){super(code||('HTTP '+status));this.status=status;this.code=code;this.body=body;}}
+async function api(method,path,body,opts){
+  const t=getToken();
+  const res=await fetch(API_URL+path,{method,
+    headers:{...(body!==undefined?{'content-type':'application/json'}:{}),...(t?{authorization:'Bearer '+t}:{})},
+    body:body===undefined?undefined:JSON.stringify(body),...(opts||{})});
+  let data=null;try{data=await res.json();}catch{}
+  if(!res.ok)throw new ApiError(res.status,data?.error,data);
+  return data;
+}
+// The UI reads user.id / user.email / user.user_metadata.display_name
+const toUser=u=>({id:u.id,email:u.email,user_metadata:{display_name:u.displayName||''}});
+
+function msSignIn(){
+  return new Promise((resolve,reject)=>{
+    if(!MS_CLIENT_ID)return reject(new Error('Microsoft sign-in is not configured.'));
+    const nonce=crypto.randomUUID(),state=crypto.randomUUID();
+    const redirect=location.origin+location.pathname;
+    const url='https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?'+new URLSearchParams({
+      client_id:MS_CLIENT_ID,response_type:'id_token',redirect_uri:redirect,
+      scope:'openid email profile',response_mode:'fragment',nonce,state,prompt:'select_account'});
+    const w=window.open(url,'packr-ms','width=480,height=640');
+    if(!w)return reject(new Error('Popup was blocked. Allow popups for this site and try again.'));
+    const timer=setInterval(()=>{
+      if(w.closed){clearInterval(timer);return reject(new Error('Sign-in window was closed.'));}
+      let href='';try{href=w.location.href;}catch{return;}   // cross-origin while on Microsoft
+      if(!href.startsWith(redirect)||!w.location.hash)return;
+      const h=new URLSearchParams(w.location.hash.slice(1));
+      clearInterval(timer);w.close();
+      if(h.get('error'))return reject(new Error(h.get('error_description')||h.get('error')));
+      if(h.get('state')!==state||!h.get('id_token'))return reject(new Error('Sign-in failed.'));
+      resolve({idToken:h.get('id_token'),nonce});
+    },200);
+  });
+}
+async function exchange(provider,payload){
+  const r=await api('POST','/auth/'+provider,payload);
+  setToken(r.token);
+  return toUser(r.user);
+}
+
+/* ── CONSTANTS ───────────────────────────────────────────────────── */
+const genId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
+const LOC_COLORS = ['#F59E0B','#10B981','#3B82F6','#A855F7','#EF4444','#06B6D4','#F97316','#EC4899'];
+
+// bagWeight = tare weight of the bag itself in grams
+const DEFAULT_LOCS = [
+  {name:'Wearing',       color:'#F59E0B', bagWeight:0,    weightLimit:null},
+  {name:'Personal Item', color:'#10B981', bagWeight:400,  weightLimit:7000},
+  {name:'Carry-on',      color:'#3B82F6', bagWeight:1800, weightLimit:7000},
+  {name:'Checked Bag',   color:'#A855F7', bagWeight:3000, weightLimit:23000},
+];
+
+// [name, category, weightGrams]
+const ITEM_TPLS = [
+  // ── Clothing ──────────────────────────────────────────────────────
+  ['Underwear','Clothing',40],
+  ['Socks – Casual','Clothing',45],
+  ['Socks – Work','Clothing',55],
+  ['Compression Socks','Clothing',65],
+  ['Business Shirt','Clothing',220],
+  ['Linen Shirt','Clothing',180],
+  ['T-Shirt','Clothing',150],
+  ['Singlet','Clothing',100],
+  ['Bra','Clothing',70],
+  ['Jumper – Formal','Clothing',400],
+  ['Jumper – Casual','Clothing',350],
+  ['Suit Pant','Clothing',400],
+  ['Suit Jacket','Clothing',700],
+  ['Chino – Navy','Clothing',480],
+  ['Chino – Tan','Clothing',480],
+  ['Pant – Lightweight','Clothing',280],
+  ['Shorts – Formal','Clothing',250],
+  ['Shorts – Casual','Clothing',180],
+  ['Bathers','Clothing',150],
+  ['Jeans','Clothing',600],
+  ['Dress – Casual','Clothing',250],
+  ['Dress – Formal','Clothing',350],
+  ['Skirt – Casual','Clothing',180],
+  ['Skirt – Formal','Clothing',250],
+  ['Leggings','Clothing',160],
+  ['Tights','Clothing',60],
+  ['Stockings','Clothing',35],
+  ['Sarong','Clothing',120],
+  ['Polo Shirt','Clothing',180],
+  ['Pant – Linen','Clothing',220],
+  ['Beanie','Clothing',60],
+  ['Trackies','Clothing',380],
+  ['Pyjama Bottom','Clothing',180],
+  ['Belt','Clothing',140],
+  ['Collar Stays','Clothing',10],
+  ['Tie','Clothing',75],
+  ['Cufflinks','Clothing',30],
+  ['Jacket','Clothing',800],
+  ['Rain Jacket','Clothing',350],
+  ['Hat – Sun','Clothing',100],
+  ['Scarf','Clothing',90],
+  ['Gym Shorts','Clothing',140],
+  ['Gym Shirt','Clothing',120],
+  // ── Footwear ──────────────────────────────────────────────────────
+  ['Runners','Footwear',650],
+  ['Casual Shoes','Footwear',600],
+  ['Business Shoes','Footwear',800],
+  ['Thongs','Footwear',180],
+  ['Sandals','Footwear',280],
+  ['Slippers','Footwear',220],
+  ['Running Shoes','Footwear',700],
+  ['Shoes – Hiking','Footwear',900],
+  // ── Electronics ───────────────────────────────────────────────────
+  ['Laptop – Work','Electronics',1800],
+  ['Laptop – Personal','Electronics',1400],
+  ['Laptop Charger – Work','Electronics',190],
+  ['Laptop Charger – Personal','Electronics',190],
+  ['Mouse','Electronics',90],
+  ['Keyboard','Electronics',500],
+  ['e-Book','Electronics',190],
+  ['Powerbank','Electronics',280],
+  ['Powerboard','Electronics',420],
+  ['Headphones – Plane','Electronics',200],
+  ['Earphones – Bluetooth','Electronics',55],
+  ['USB Brick','Electronics',75],
+  ['Power Adaptor','Electronics',110],
+  ['HDMI Cable','Electronics',120],
+  ['Phone – Personal','Electronics',175],
+  ['Phone – Work','Electronics',175],
+  ['Phone Charger – Personal','Electronics',45],
+  ['Phone Charger – Work','Electronics',45],
+  ['Camera','Electronics',500],
+  ['Camera Lens','Electronics',380],
+  ['Camera Battery','Electronics',75],
+  ['Camera SD Card','Electronics',5],
+  ['GoPro','Electronics',130],
+  ['GoPro Cables','Electronics',60],
+  ['GoPro Mounts','Electronics',80],
+  ['Smart Watch','Electronics',50],
+  ['Watch Charger','Electronics',30],
+  ['Tablet','Electronics',450],
+  ['Tablet Charger','Electronics',90],
+  // ── Accessories ───────────────────────────────────────────────────
+  ['Glasses','Accessories',25],
+  ['Sunglasses','Accessories',30],
+  ['Water Bottle','Accessories',200],
+  ['Fan','Accessories',280],
+  ['Travel Pillow','Accessories',190],
+  ['Eye Mask','Accessories',18],
+  ['Ear Plugs','Accessories',4],
+  ['Umbrella','Accessories',260],
+  ['Watch','Accessories',80],
+  ['Cable Organiser','Accessories',70],
+  ['Cross Body Bag','Accessories',350],
+  ['Money Belt','Accessories',45],
+  // ── Laundry ───────────────────────────────────────────────────────
+  ['Laundry Detergent','Laundry',100],
+  ['Laundry Wash Bag','Laundry',45],
+  ['Laundry Bag','Laundry',45],
+  ['Packing Cubes','Laundry',130],
+  // ── Documents & Finance ───────────────────────────────────────────
+  ['Passport Wallet','Documents & Finance',55],
+  ['Luggage Lock','Documents & Finance',40],
+  ['Travel SIM','Documents & Finance',2],
+  ['Notepad','Documents & Finance',100],
+  ['Pen','Documents & Finance',18],
+  ['Wallet','Documents & Finance',75],
+  ['Cash / Currency','Documents & Finance',40],
+  ['Travel Insurance Docs','Documents & Finance',15],
+  ['Boarding Pass','Documents & Finance',5],
+  // ── Toiletries & Health ───────────────────────────────────────────
+  ['Toiletries','Toiletries & Health',450],
+  ['Towel','Toiletries & Health',300],
+  ['Medication','Toiletries & Health',50],
+  ['Sunscreen','Toiletries & Health',190],
+  ['Insect Repellent','Toiletries & Health',90],
+  ['Hand Sanitiser','Toiletries & Health',90],
+  ['Vitamins','Toiletries & Health',70],
+  ['Lip Balm','Toiletries & Health',18],
+];
+
+const fmtW = g => {
+  if (g === 0) return '0g';
+  if (g < 1000) return `${g}g`;
+  const kg = g / 1000;
+  return `${kg % 1 === 0 ? kg.toFixed(0) : kg.toFixed(1)}kg`;
+};
+
+// Canonical category list derived from master items + Other
+const CATEGORIES=[...new Set(ITEM_TPLS.map(([,c])=>c)),'Other'];
+// Normalise legacy 'Custom' to 'Other' for display (stored value unchanged)
+const normCat=c=>(c==='Custom'?'Other':c)||'Other';
+
+// Partial packing helpers — backward compatible with old boolean-only assignments
+const getPackedQty=a=>a.packedQty??( a.packed?a.quantity:0);
+const isFullyPacked=a=>a.quantity>0&&getPackedQty(a)>=a.quantity;
+const isPartiallyPacked=a=>getPackedQty(a)>0&&!isFullyPacked(a);
+
+const mkTrip = name => ({
+  id:genId(), name, createdAt:Date.now(),
+  locations: DEFAULT_LOCS.map(l=>({...l,id:genId()})),
+  items: [],
+  assignments:[],
+});
+
+/* ── PRIMITIVES ──────────────────────────────────────────────────── */
+function Veil({onClick,alpha=.55}){
+  return <div onClick={onClick} style={{position:'fixed',inset:0,
+    background:`rgba(0,0,0,${alpha})`,zIndex:200,animation:'fd .15s ease'}}/>;
+}
+
+function Modal({title,onClose,children,w=380}){
+  useEffect(()=>{
+    const fn=e=>{if(e.key==='Escape')onClose();};
+    document.addEventListener('keydown',fn);
+    return()=>document.removeEventListener('keydown',fn);
+  },[onClose]);
+  return <>
+    <Veil onClick={onClose}/>
+    <div style={{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
+      width:w,maxWidth:'94vw',maxHeight:'84vh',overflowY:'auto',
+      background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:24,
+      zIndex:201,animation:'fdModal .2s ease',boxShadow:'0 24px 64px rgba(0,0,0,.65)'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+        <div className="bb" style={{fontSize:22,color:'var(--am)'}}>{title}</div>
+        <button onClick={onClose} style={{color:'var(--tx2)',fontSize:20,padding:'2px 6px'}}>✕</button>
+      </div>
+      {children}
+    </div>
+  </>;
+}
+
+function Confirm({message,onConfirm,onCancel,danger=true}){
+  useEffect(()=>{
+    const fn=e=>{if(e.key==='Escape')onCancel();};
+    document.addEventListener('keydown',fn);
+    return()=>document.removeEventListener('keydown',fn);
+  },[onCancel]);
+  return <>
+    <Veil onClick={onCancel} alpha={.6}/>
+    <div style={{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
+      width:320,maxWidth:'90vw',background:'var(--sf)',border:'1px solid var(--bd)',
+      borderRadius:12,padding:24,zIndex:202,boxShadow:'0 24px 64px rgba(0,0,0,.7)',
+      animation:'fdModal .18s ease'}}>
+      <div style={{fontSize:14,color:'var(--tx)',marginBottom:20,lineHeight:1.5}}>{message}</div>
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={onCancel} style={{flex:1,padding:'9px',borderRadius:7,
+          background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:13,color:'var(--tx2)'}}>
+          Cancel
+        </button>
+        <button onClick={onConfirm} style={{flex:1,padding:'9px',borderRadius:7,fontSize:13,
+          fontWeight:700,background:danger?'rgba(240,82,82,.15)':'var(--am)',
+          border:danger?'1px solid rgba(240,82,82,.4)':'none',
+          color:danger?'var(--rd)':'#1a0e00'}}>
+          Confirm
+        </button>
+      </div>
+    </div>
+  </>;
+}
+
+function useConfirm(){
+  const [state,setState]=useState(null);
+  const ask=(message,onConfirm,danger=true)=>setState({message,onConfirm,danger});
+  const el=state?<Confirm message={state.message} danger={state.danger}
+    onConfirm={()=>{state.onConfirm();setState(null);}}
+    onCancel={()=>setState(null)}/>:null;
+  return{ask,el};
+}
+
+function NameInput({placeholder,defVal='',onSubmit}){
+  const [v,setV]=useState(defVal);
+  const r=useRef();
+  useEffect(()=>{r.current?.focus();r.current?.select();},[]);
+  const go=()=>v.trim()&&onSubmit(v.trim());
+  return <div style={{display:'flex',gap:8}}>
+    <input ref={r} value={v} onChange={e=>setV(e.target.value)}
+      onKeyDown={e=>e.key==='Enter'&&go()} placeholder={placeholder}
+      style={{flex:1,background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:7,
+        padding:'9px 12px',color:'var(--tx)',outline:'none'}}/>
+    <button onClick={go} disabled={!v.trim()} style={{background:'var(--am)',color:'#1a0e00',
+      borderRadius:7,padding:'9px 18px',fontWeight:700,fontSize:13,opacity:v.trim()?1:.4}}>Save</button>
+  </div>;
+}
+
+function Qty({value,onChange}){
+  return <div style={{display:'flex',alignItems:'center',gap:4,userSelect:'none',flexShrink:0}}>
+    <button onClick={()=>onChange(Math.max(0,value-1))}
+      style={{width:24,height:24,borderRadius:5,background:'var(--sf3)',
+        fontSize:17,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+    <span style={{width:22,textAlign:'center',fontSize:13,fontWeight:600}}>{value}</span>
+    <button onClick={()=>onChange(Math.min(30,value+1))}
+      style={{width:24,height:24,borderRadius:5,background:'var(--sf3)',
+        fontSize:17,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+  </div>;
+}
+
+function PackBox({packed,onChange}){
+  return <button onClick={onChange} style={{width:26,height:26,borderRadius:6,flexShrink:0,
+    border:`2px solid ${packed?'var(--gn)':'var(--sf3)'}`,
+    background:packed?'var(--gn)':'transparent',color:'#fff',
+    fontSize:13,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',
+    transition:'all .15s'}}>
+    {packed?'✓':''}
+  </button>;
+}
+
+/* ── ITEM CARD (board) ───────────────────────────────────────────── */
+const IS_TOUCH_PRIMARY=window.matchMedia('(hover:none)').matches;
+
+// Remap vertical wheel to horizontal scroll — mouse-only devices (not touch, not trackpad)
+function useHorizontalScroll(){
+  const ref=useRef();
+  useEffect(()=>{
+    if(IS_TOUCH_PRIMARY)return; // touch devices handle it natively
+    const el=ref.current;
+    if(!el)return;
+    const handler=e=>{
+      // Only remap if the scroll is predominantly vertical (trackpad 2-finger swipe has deltaX already)
+      if(Math.abs(e.deltaX)>Math.abs(e.deltaY))return;
+      if(e.deltaY===0)return;
+      e.preventDefault();
+      el.scrollLeft+=e.deltaY;
+    };
+    el.addEventListener('wheel',handler,{passive:false});
+    return()=>el.removeEventListener('wheel',handler);
+  },[]);
+  return ref;
+}
+const findScrollable=el=>{
+  let n=el;
+  while(n&&n!==document.body){
+    const s=window.getComputedStyle(n);
+    if(/(auto|scroll)/.test(s.overflowY)&&n.scrollHeight>n.clientHeight) return n;
+    n=n.parentElement;
+  }
+  return null;
+};
+
+function ItemCard({item,a,locColor,onQty,onSetPackedQty,onOpen,onDragStart,onDragEnter,onDragEnd,showInsertLine,sort='personal',onStepperChange}){
+  const packedQty=getPackedQty(a);
+  const full=isFullyPacked(a);
+  const partial=isPartiallyPacked(a);
+  const canDrag=!full&&sort==='personal';
+
+  const [showStepper,setShowStepper]=useState(false);
+  const [completing,setCompleting]=useState(false);
+  const autoCloseTimer=useRef(null);
+
+  const clearAutoClose=()=>{
+    if(autoCloseTimer.current){clearTimeout(autoCloseTimer.current);autoCloseTimer.current=null;}
+  };
+  const resetAutoClose=()=>{
+    clearAutoClose();
+    autoCloseTimer.current=setTimeout(()=>closeStepper(),5000);
+  };
+  useEffect(()=>()=>clearAutoClose(),[]);
+
+  const openStepper=()=>{setShowStepper(true);onStepperChange&&onStepperChange(a.id);resetAutoClose();};
+  const closeStepper=()=>{setShowStepper(false);onStepperChange&&onStepperChange(null);clearAutoClose();};
+
+  const triggerComplete=()=>{
+    setCompleting(true);
+    closeStepper();
+    setTimeout(()=>{
+      onSetPackedQty(a.quantity);
+      setCompleting(false);
+    },600);
+  };
+
+  const handleIndicatorTap=()=>{
+    if(completing)return;
+    if(showStepper){
+      closeStepper();
+    } else if(a.quantity===1){
+      // Single item: direct toggle, no stepper ever
+      if(full) onSetPackedQty(0);
+      else triggerComplete();
+    } else {
+      openStepper();
+    }
+  };
+
+  const handleStepperChange=qty=>{
+    if(qty>=a.quantity){
+      triggerComplete();
+    } else {
+      onSetPackedQty(Math.max(0,qty));
+      if(qty<=0) closeStepper();
+      else resetAutoClose(); // reset timer on each tap
+    }
+  };
+
+  const handleNumberTap=()=>{
+    if(completing)return;
+    if(full){
+      // Fully packed → tap fraction unpacks all
+      onSetPackedQty(0);
+      closeStepper();
+    } else {
+      // Partial → tap fraction packs all
+      triggerComplete();
+    }
+  };
+
+  const onHandleTouchStart=e=>{
+    e.stopPropagation();
+    onDragStart(a.id);
+    const ghost=document.createElement('div');
+    ghost.textContent=item.name;
+    Object.assign(ghost.style,{
+      position:'fixed',left:'-9999px',top:'-9999px',
+      zIndex:9999,pointerEvents:'none',
+      background:'var(--am)',color:'#1a0e00',
+      padding:'8px 14px',borderRadius:8,fontSize:13,fontWeight:700,
+      boxShadow:'0 8px 24px rgba(0,0,0,.5)',
+      opacity:'0.92',whiteSpace:'nowrap',
+      transform:'translate(-50%,-180%)',
+    });
+    document.body.appendChild(ghost);
+    let scrollEl=null,scrollTimer=null;
+    const move=ev=>{
+      ev.preventDefault();
+      const t=ev.touches[0];
+      ghost.style.left=t.clientX+'px';
+      ghost.style.top=t.clientY+'px';
+      const el=document.elementFromPoint(t.clientX,t.clientY);
+      const card=el?.closest('[data-assignid]');
+      if(card&&card.dataset.assignid!==a.id) onDragEnter(card.dataset.assignid);
+      if(!scrollEl) scrollEl=findScrollable(el);
+      if(scrollEl){
+        const rect=scrollEl.getBoundingClientRect();
+        const ZONE=80,SPEED=6;
+        clearTimeout(scrollTimer);
+        if(t.clientY-rect.top<ZONE){const step=()=>{scrollEl.scrollBy(0,-SPEED);scrollTimer=setTimeout(step,16);};step();}
+        else if(rect.bottom-t.clientY<ZONE){const step=()=>{scrollEl.scrollBy(0,SPEED);scrollTimer=setTimeout(step,16);};step();}
+      }
+    };
+    const end=()=>{ghost.remove();clearTimeout(scrollTimer);onDragEnd();
+      document.removeEventListener('touchmove',move);document.removeEventListener('touchend',end);};
+    document.addEventListener('touchmove',move,{passive:false});
+    document.addEventListener('touchend',end);
+  };
+
+  // Left indicator — always visible, tap to enter/exit pack mode
+  const indicator=<div onClick={handleIndicatorTap} style={{flexShrink:0,cursor:'pointer'}}>
+    {completing
+      ?<div style={{width:20,height:20,borderRadius:4,background:locColor,
+          display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+            <path d="M1 4l3 3 6-6" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+        </div>
+      :full
+      ?<div style={{width:20,height:20,borderRadius:4,background:'var(--gn)',
+          display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+            <path d="M1 4l3 3 6-6" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+        </div>
+      :partial
+      ?<div style={{width:20,height:20,borderRadius:4,background:locColor,
+          display:'flex',alignItems:'center',justifyContent:'center',
+          boxShadow:showStepper?`0 0 0 2px ${locColor}40`:undefined}}>
+          <span style={{fontSize:packedQty>=10?8:11,fontWeight:700,color:'#fff',lineHeight:1}}>
+            {packedQty}
+          </span>
+        </div>
+      :<div style={{width:20,height:20,borderRadius:4,border:'1.5px solid var(--bd)',
+          background:'transparent',
+          boxShadow:showStepper?`0 0 0 2px ${locColor}40`:undefined}}/>
+    }
+  </div>;
+
+  return <>
+    {showInsertLine&&<div style={{height:3,borderRadius:2,background:'var(--am)',margin:'2px 6px',flexShrink:0}}/>}
+    <div
+      data-assignid={a.id}
+      draggable={canDrag}
+      onDragStart={canDrag?e=>{e.dataTransfer.effectAllowed='move';onDragStart(a.id);}:undefined}
+      onDragEnter={e=>{e.preventDefault();if(onDragEnter)onDragEnter(a.id);}}
+      onDragOver={e=>e.preventDefault()}
+      onDragEnd={canDrag?onDragEnd:undefined}
+      style={{background:full?`${locColor}0c`:'var(--sf2)',
+        border:`1px solid ${full?locColor+'38':partial||showStepper?locColor+'60':'var(--bd)'}`,
+        borderRadius:8,padding:'9px 11px',display:'flex',alignItems:'center',gap:8,
+        transition:'all .2s',opacity:(full&&!showStepper)?.58:1,marginBottom:6}}>
+      {canDrag&&<span
+        onTouchStart={IS_TOUCH_PRIMARY?onHandleTouchStart:undefined}
+        style={{color:'var(--tx3)',fontSize:16,flexShrink:0,lineHeight:1,
+          padding:'4px 4px',userSelect:'none',touchAction:'none',cursor:'grab'}}>
+        ⠿
+      </span>}
+      {indicator}
+      <span onClick={onOpen} style={{flex:1,fontSize:13,fontWeight:500,cursor:'pointer',
+        textDecoration:full?'line-through':'none',color:'var(--tx)',minWidth:0,
+        overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+        {item.name}
+      </span>
+      {/* Right side: packed stepper in pack mode, qty stepper normally */}
+      {showStepper
+        ?<div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+            <button onClick={()=>handleStepperChange(packedQty-1)}
+              style={{width:22,height:22,borderRadius:4,background:'var(--sf3)',
+                fontSize:15,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx)'}}>−</button>
+            <span onClick={handleNumberTap}
+              style={{fontSize:12,fontWeight:700,color:'var(--am)',minWidth:36,
+                textAlign:'center',cursor:'pointer',userSelect:'none',whiteSpace:'nowrap'}}>
+              {packedQty}/{a.quantity}
+            </span>
+            <button onClick={()=>handleStepperChange(packedQty+1)}
+              style={{width:22,height:22,borderRadius:4,background:'var(--sf3)',
+                fontSize:15,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx)'}}>+</button>
+          </div>
+        :<Qty value={a.quantity} onChange={onQty}/>
+      }
+    </div>
+  </>;
+}
+
+/* ── LOCATION COLUMN ─────────────────────────────────────────────── */
+function LocCol({loc,items,assignments,onAdd,onQty,onSetPackedQty,onOpen,onRename,onSetBagWeight,onSetWeightLimit,onDel,onReorder,onPackAll,onUnpackAll,isFirst,isLast,onMoveLeft,onMoveRight,sort='personal'}){
+  const [menu,setMenu]=useState(false);
+  const [dragId,setDragId]=useState(null);
+  const [overId,setOverId]=useState(null);
+  const [stepperItemId,setStepperItemId]=useState(null); // which item has stepper open
+  // Refs so handleDragEnd always reads current values, not stale closure
+  const dragIdRef=useRef(null);
+  const overIdRef=useRef(null);
+  const mRef=useRef();
+  const{ask:confirm,el:confirmEl}=useConfirm();
+  useEffect(()=>{
+    if(!menu)return;
+    const fn=e=>{if(!mRef.current?.contains(e.target))setMenu(false);};
+    document.addEventListener('mousedown',fn);
+    return()=>document.removeEventListener('mousedown',fn);
+  },[menu]);
+
+  const la=assignments.filter(a=>a.locationId===loc.id);
+  const total=la.reduce((s,a)=>s+a.quantity,0);
+  // Proportional: sum of packedQty across all items (partial counts fractionally)
+  const packedCount=la.reduce((s,a)=>s+getPackedQty(a),0);
+  const pct=total>0?packedCount/total:0;
+  const done=total>0&&packedCount===total;
+
+  // Sort: partial stays with unpacked, only fully packed sinks to bottom
+  // Items with stepper open stay in their current group (prevents jumping during interaction)
+  const isConsideredPacked=a=>isFullyPacked(a)&&a.id!==stepperItemId;
+  const withItem=la.map(a=>({...a,item:items.find(i=>i.id===a.itemId)}));
+  const unpackedRows=withItem.filter(a=>!isConsideredPacked(a));
+  const packedRows=withItem.filter(a=>isConsideredPacked(a));
+  const sorted=[...sortAssignRows(unpackedRows,sort),...sortAssignRows(packedRows,sort)];
+
+  const bagW = loc.bagWeight ?? 0;
+  const contentsW = withItem.reduce((s,a)=>s+(a.item?.weight??200)*a.quantity, 0);
+  const totalW = bagW + contentsW;
+  const wLimit = loc.weightLimit ?? null;
+  const overLimit = wLimit && totalW > wLimit;
+  const nearLimit = wLimit && !overLimit && totalW > wLimit * 0.9;
+
+  const startDrag=id=>{setDragId(id);dragIdRef.current=id;};
+  const enterDrag=id=>{setOverId(id);overIdRef.current=id;};
+  const handleDragEnd=()=>{
+    const from=dragIdRef.current;
+    const to=overIdRef.current;
+    if(from&&to&&from!==to) onReorder(loc.id,from,to);
+    setDragId(null);setOverId(null);
+    dragIdRef.current=null;overIdRef.current=null;
+  };
+
+  return <div className="loc-col" style={{borderTop:`3px solid ${loc.color}`}}
+    onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget)){setOverId(null);overIdRef.current=null;}}}>
+    {confirmEl}
+    <div style={{padding:'12px 12px 10px',flexShrink:0}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+        <div className="bb" style={{fontSize:18,color:loc.color,letterSpacing:2}}>{loc.name}</div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontSize:14,fontWeight:700,fontFamily:'Outfit,sans-serif',
+              color:overLimit?'var(--rd)':nearLimit?'var(--am)':'var(--tx)'}}>
+              ~{fmtW(totalW)}{wLimit?` / ${fmtW(wLimit)}`:''}
+              {overLimit&&<span style={{fontSize:10,marginLeft:4}}>⚠</span>}
+            </div>
+            {bagW>0&&<div style={{fontSize:9,color:'var(--tx3)',lineHeight:1}}>bag: {fmtW(bagW)}</div>}
+          </div>
+          <div style={{position:'relative'}} ref={mRef}>
+            <button onClick={()=>setMenu(m=>!m)}
+              style={{color:'var(--tx3)',fontSize:19,padding:'1px 5px',borderRadius:4,
+                background:menu?'var(--sf3)':'transparent'}}>⋯</button>
+            {menu&&<div style={{position:'absolute',right:0,top:'calc(100% + 4px)',
+              background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,
+              zIndex:20,width:168,boxShadow:'0 10px 28px rgba(0,0,0,.55)',overflow:'hidden'}}>
+              <button onClick={()=>{onRename();setMenu(false);}}
+                style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>Rename</button>
+              {!isFirst&&<button onClick={()=>{onMoveLeft();setMenu(false);}}
+                style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>← Move left</button>}
+              {!isLast&&<button onClick={()=>{onMoveRight();setMenu(false);}}
+                style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>→ Move right</button>}
+              <button onClick={()=>{onSetBagWeight();setMenu(false);}}
+                style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>Set bag weight</button>
+              <button onClick={()=>{onSetWeightLimit();setMenu(false);}}
+                style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--tx)',textAlign:'left'}}>
+                {wLimit?`Weight limit: ${fmtW(wLimit)}`:'Set weight limit'}
+              </button>
+              <button onClick={()=>{confirm(`Delete "${loc.name}" and all its items?`,onDel);setMenu(false);}}
+                style={{display:'block',width:'100%',padding:'9px 14px',fontSize:13,color:'var(--rd)',textAlign:'left'}}>Delete</button>
+            </div>}
+          </div>
+        </div>
+      </div>
+      <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--tx3)',marginBottom:7}}>
+        <span>{la.length} item{la.length!==1?'s':''} · {total} total</span>
+        <span style={{color:done?'var(--gn)':'var(--tx3)'}}>{packedCount}/{total} packed</span>
+      </div>
+      <div style={{height:3,background:'var(--sf3)',borderRadius:2,overflow:'hidden'}}>
+        <div style={{height:'100%',borderRadius:2,transition:'width .35s ease',
+          width:`${pct*100}%`,background:done?'var(--gn)':loc.color}}/>
+      </div>
+    </div>
+
+    <div onClick={e=>e.target===e.currentTarget&&onAdd()}
+      style={{flex:1,overflowY:'auto',padding:'6px 8px 0',display:'flex',flexDirection:'column',cursor:'default'}}>
+      {sorted.length===0
+        ?<div onClick={onAdd} style={{textAlign:'center',color:'var(--tx3)',fontSize:12,
+            padding:'28px 0',cursor:'pointer'}}>
+            Tap to add items
+          </div>
+        :null
+      }
+      {sorted.map(a=>{
+        return a.item?<ItemCard key={a.id} item={a.item} a={a} locColor={loc.color}
+          onQty={q=>onQty(a.itemId,loc.id,q)}
+          onSetPackedQty={q=>onSetPackedQty(a.itemId,loc.id,q)}
+          onOpen={()=>onOpen(a.itemId)}
+          onDragStart={id=>startDrag(id)}
+          onDragEnter={id=>enterDrag(id)}
+          onDragEnd={handleDragEnd}
+          showInsertLine={overId===a.id&&dragId!==a.id&&overId!=='__bottom__'}
+          onStepperChange={setStepperItemId}
+          sort={sort}/>:null;
+      })}
+      {/* Bottom drop zone — allows dropping after the last item */}
+      <div
+        data-assignid="__bottom__"
+        onDragEnter={e=>{e.preventDefault();enterDrag('__bottom__');}}
+        onDragOver={e=>e.preventDefault()}
+        style={{flex:1,minHeight:24,position:'relative'}}>
+        {overId==='__bottom__'&&dragId&&<div style={{height:3,borderRadius:2,
+          background:'var(--am)',margin:'0 4px'}}/>}
+      </div>
+    </div>
+
+    <div style={{padding:8,borderTop:'1px solid var(--bd)',flexShrink:0}}>
+      {/* Add item — primary action */}
+      <button onClick={onAdd} style={{width:'100%',padding:'9px',borderRadius:7,
+        background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:13,
+        display:'flex',alignItems:'center',justifyContent:'center',gap:6,marginBottom:6}}>
+        <span style={{fontSize:16}}>+</span> Add item
+      </button>
+      {/* Pack / Unpack all — secondary */}
+      {la.length>0&&<div style={{display:'flex',gap:6}}>
+        {unpackedRows.length>0&&<button onClick={()=>confirm('Mark all items in this bag as packed?',onPackAll,false)}
+          style={{flex:1,padding:'5px',borderRadius:6,fontSize:11,fontWeight:600,
+            background:'transparent',border:'1px solid var(--sf3)',color:'var(--tx3)',
+            display:'flex',alignItems:'center',justifyContent:'center',gap:3}}>
+          ✓ Pack all
+        </button>}
+        {la.some(a=>getPackedQty(a)>0)&&<button onClick={()=>confirm('Mark all items in this bag as unpacked?',onUnpackAll,false)}
+          style={{flex:1,padding:'5px',borderRadius:6,fontSize:11,fontWeight:600,
+            background:'transparent',border:'1px solid var(--sf3)',color:'var(--tx3)',
+            display:'flex',alignItems:'center',justifyContent:'center',gap:3}}>
+          ↺ Unpack all
+        </button>}
+      </div>}
+    </div>
+  </div>;
+}
+
+/* ── ITEM DRAWER ─────────────────────────────────────────────────── */
+function ItemDrawer({item,locations,assignments,onClose,onQty,onToggle,onRename,onSetWeight,onSetCategory,onDel}){
+  const [editVal,setEditVal]=useState(null);
+  const [editingWeight,setEditingWeight]=useState(false);
+  const [editingCat,setEditingCat]=useState(false);
+  const [weightVal,setWeightVal]=useState('');
+  const wRef=useRef();
+  const{ask:confirm,el:confirmEl}=useConfirm();
+  const totalQty=assignments.reduce((s,a)=>s+a.quantity,0);
+  const packedQtyTotal=assignments.reduce((s,a)=>s+getPackedQty(a),0);
+  const itemWeight = item.weight ?? 200;
+  const totalWeight = itemWeight * totalQty;
+  const saveRename=()=>{if(editVal?.trim())onRename(editVal.trim());setEditVal(null);};
+  const startWeight=()=>{setWeightVal(String(itemWeight));setEditingWeight(true);};
+  const saveWeight=()=>{
+    const v=parseInt(weightVal);
+    if(!isNaN(v)&&v>=0)onSetWeight(v);
+    setEditingWeight(false);
+  };
+  useEffect(()=>{if(editingWeight)wRef.current?.focus();},[editingWeight]);
+
+  const displayCat=normCat(item.category);
+  const catScrollRef=useHorizontalScroll();
+
+  return <>
+    {confirmEl}
+    <Veil onClick={onClose} alpha={.38}/>
+    <div className="drawer-panel">
+
+      <div style={{padding:'18px 18px 14px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
+          <div style={{flex:1,marginRight:12,minWidth:0}}>
+            {/* Name — primary */}
+            {editVal!==null
+              ?<input value={editVal} onChange={e=>setEditVal(e.target.value)}
+                  onKeyDown={e=>{if(e.key==='Enter')saveRename();if(e.key==='Escape')setEditVal(null);}}
+                  autoFocus style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--am)',
+                    borderRadius:6,padding:'5px 9px',color:'var(--tx)',fontSize:16,fontWeight:600,outline:'none',marginBottom:6}}/>
+              :<div style={{fontSize:17,fontWeight:700,marginBottom:6}}>{item.name}</div>
+            }
+            {/* Category — below name, inline edit replaces label */}
+            {editingCat
+              ?<div ref={catScrollRef} style={{overflowX:'auto',touchAction:'pan-x',
+                  overscrollBehaviorX:'contain',WebkitOverflowScrolling:'touch',
+                  scrollbarWidth:'none',msOverflowStyle:'none',
+                  maxWidth:'100%',minWidth:0}}>
+                  <div style={{display:'flex',gap:5,paddingBottom:2,width:'max-content'}}>
+                    {CATEGORIES.map(cat=>(
+                      <button key={cat} onClick={()=>{onSetCategory(cat);setEditingCat(false);}}
+                        style={{padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,
+                          flexShrink:0,border:`1px solid ${displayCat===cat?'var(--am)':'transparent'}`,
+                          background:displayCat===cat?'var(--am)':'var(--sf2)',
+                          color:displayCat===cat?'#1a0e00':'var(--tx2)',
+                          transition:'all .12s'}}>
+                        {cat}
+                      </button>
+                    ))}
+                    <button onClick={()=>setEditingCat(false)}
+                      style={{flexShrink:0,fontSize:10,color:'var(--tx3)',padding:'3px 8px',
+                        borderRadius:20,background:'var(--sf3)',border:'none',whiteSpace:'nowrap'}}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              :<button onClick={()=>{setEditingCat(true);setEditVal(null);setEditingWeight(false);}}
+                  style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,
+                    background:'none',padding:0,display:'flex',alignItems:'center',gap:4}}
+                  onMouseEnter={e=>e.currentTarget.style.color='var(--am)'}
+                  onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>
+                  {displayCat} ✎
+                </button>
+            }
+          </div>
+          <button onClick={onClose} style={{color:'var(--tx2)',fontSize:19,flexShrink:0}}>✕</button>
+        </div>
+
+        {/* Stats row */}
+        <div style={{display:'flex',gap:8,marginBottom:12}}>
+          {[['Total',totalQty,'var(--am)'],['Packed',packedQtyTotal,'var(--gn)'],['To Pack',totalQty-packedQtyTotal,'var(--tx2)']].map(([l,v,c])=>(
+            <div key={l} style={{flex:1,background:'var(--sf2)',borderRadius:7,padding:'8px 10px',textAlign:'center'}}>
+              <div style={{fontSize:21,fontWeight:700,color:c}}>{v}</div>
+              <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>{l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Weight row */}
+        <div style={{background:'var(--sf2)',borderRadius:8,padding:'9px 12px',
+          display:'flex',alignItems:'center',gap:8}}>
+          <div style={{fontSize:11,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,flex:1}}>
+            Weight per item
+          </div>
+          {editingWeight
+            ?<div style={{display:'flex',gap:6,alignItems:'center'}}>
+                <input ref={wRef} value={weightVal} onChange={e=>setWeightVal(e.target.value.replace(/\D/g,''))}
+                  onKeyDown={e=>{if(e.key==='Enter')saveWeight();if(e.key==='Escape')setEditingWeight(false);}}
+                  onBlur={saveWeight}
+                  style={{width:64,background:'var(--sf3)',border:'1px solid var(--am)',borderRadius:5,
+                    padding:'3px 7px',color:'var(--tx)',fontSize:13,fontWeight:700,outline:'none',textAlign:'center'}}/>
+                <span style={{fontSize:11,color:'var(--tx3)'}}>g</span>
+              </div>
+            :<button onClick={startWeight}
+                style={{display:'flex',alignItems:'center',gap:6,padding:'3px 7px',borderRadius:5,
+                  background:'var(--sf3)',border:'none',transition:'background .12s'}}
+                onMouseEnter={e=>e.currentTarget.style.background='var(--bd)'}
+                onMouseLeave={e=>e.currentTarget.style.background='var(--sf3)'}>
+                <span style={{fontSize:13,fontWeight:700,color:'var(--tx)'}}>{fmtW(itemWeight)}</span>
+                <span style={{fontSize:10,color:'var(--tx3)'}}>✎</span>
+              </button>
+          }
+          <div style={{fontSize:12,color:'var(--tx2)',borderLeft:'1px solid var(--bd)',paddingLeft:10,marginLeft:2}}>
+            ~{fmtW(totalWeight)} total
+          </div>
+        </div>
+      </div>
+
+      <div style={{flex:1,overflowY:'auto',padding:16,paddingBottom:'calc(16px + env(safe-area-inset-bottom))'}}>
+
+        <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>
+          Location Assignments
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {locations.map(loc=>{
+            const a=assignments.find(x=>x.locationId===loc.id);
+            const qty=a?.quantity||0;
+            const locW=itemWeight*qty;
+            return <div key={loc.id} style={{borderRadius:8,padding:'11px 13px',
+              background:qty>0?'var(--sf2)':'transparent',
+              border:`1px solid ${qty>0?loc.color+'40':'var(--bd)'}`,
+              borderLeft:`3px solid ${qty>0?loc.color:'var(--bd)'}`,
+              display:'flex',alignItems:'center',gap:12,transition:'all .2s'}}>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:13,color:qty>0?'var(--tx)':'var(--tx3)'}}>{loc.name}</div>
+                {qty>0&&a&&<div style={{fontSize:11,marginTop:2,
+                  color:isFullyPacked(a)?'var(--gn)':isPartiallyPacked(a)?'var(--am)':'var(--tx3)'}}>
+                  {isFullyPacked(a)?'✓ Packed':isPartiallyPacked(a)?`${getPackedQty(a)}/${a.quantity} packed`:'Not yet packed'}{qty>0?` · ~${fmtW(locW)}`:''}
+                </div>}
+              </div>
+              {qty>0&&a&&<PackBox packed={a.packed} onChange={()=>onToggle(loc.id)}/>}
+              <Qty value={qty} onChange={q=>onQty(loc.id,q)}/>
+            </div>;
+          })}
+        </div>
+      </div>
+
+      <div className="drawer-panel-footer" style={{padding:'12px 14px 14px',borderTop:'1px solid var(--bd)',flexShrink:0}}>
+        {editVal!==null
+          ?<div style={{display:'flex',gap:8}}>
+              <button onClick={()=>setEditVal(null)} style={{flex:1,padding:'9px',borderRadius:7,
+                background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:13}}>Cancel</button>
+              <button onClick={saveRename} style={{flex:1,padding:'9px',borderRadius:7,
+                background:'var(--am)',color:'#1a0e00',fontSize:13,fontWeight:700}}>Save Name</button>
+            </div>
+          :<>
+            <button onClick={onClose} style={{width:'100%',padding:'11px',borderRadius:8,
+              background:'var(--am)',color:'#1a0e00',fontSize:14,fontWeight:700,marginBottom:8}}>
+              Done
+            </button>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={()=>setEditVal(item.name)} style={{flex:1,padding:'7px',borderRadius:6,
+                background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:12,color:'var(--tx2)'}}>✎ Rename</button>
+              <button onClick={()=>confirm(`Delete "${item.name}" from all locations?`,onDel)}
+                style={{flex:1,padding:'7px',borderRadius:6,fontSize:12,fontWeight:500,
+                  background:'rgba(240,82,82,.08)',border:'1px solid rgba(240,82,82,.25)',color:'var(--rd)'}}>
+                ✗ Delete
+              </button>
+            </div>
+          </>
+        }
+      </div>
+    </div>
+  </>;
+}
+
+/* ── CATEGORY FILTER ─────────────────────────────────────────────── */
+function CategoryFilter({categories,selected,onSelect}){
+  const scrollRef=useHorizontalScroll();
+  return <div ref={scrollRef} style={{display:'flex',gap:5,overflowX:'auto',paddingBottom:4,marginBottom:10,
+    scrollbarWidth:'none',msOverflowStyle:'none',
+    touchAction:'pan-x',overscrollBehaviorX:'contain',WebkitOverflowScrolling:'touch',
+    alignItems:'center'}}>
+    {['All',...categories].map(cat=>(
+      <button key={cat} onClick={()=>onSelect(cat==='All'?null:cat)}
+        style={{padding:'4px 11px',borderRadius:20,fontSize:11,fontWeight:600,
+          flexShrink:0,border:'none',transition:'all .12s',
+          background:selected===(cat==='All'?null:cat)?'var(--am)':'var(--sf2)',
+          color:selected===(cat==='All'?null:cat)?'#1a0e00':'var(--tx2)'}}>
+        {cat}
+      </button>
+    ))}
+    {selected&&<button onClick={()=>onSelect(null)}
+      style={{flexShrink:0,fontSize:10,color:'var(--tx3)',padding:'4px 8px',
+        borderRadius:20,background:'var(--sf3)',border:'none',whiteSpace:'nowrap'}}>
+      ✕ Clear
+    </button>}
+  </div>;
+}
+
+function CategoryPills({value,onChange}){
+  const scrollRef=useHorizontalScroll();
+  return <div ref={scrollRef} style={{display:'flex',gap:5,overflowX:'auto',paddingBottom:4,
+    scrollbarWidth:'none',msOverflowStyle:'none',
+    touchAction:'pan-x',overscrollBehaviorX:'contain',WebkitOverflowScrolling:'touch'}}>
+    {CATEGORIES.map(cat=>(
+      <button key={cat} onClick={()=>onChange(cat)}
+        style={{padding:'4px 11px',borderRadius:20,fontSize:11,fontWeight:600,
+          flexShrink:0,border:`1px solid ${normCat(value)===cat?'var(--am)':'transparent'}`,
+          background:normCat(value)===cat?'var(--am)':'var(--sf2)',
+          color:normCat(value)===cat?'#1a0e00':'var(--tx2)',
+          transition:'all .12s'}}>
+        {cat}
+      </button>
+    ))}
+  </div>;
+}
+
+function Picker({items,assignments,locId,loc,onClose,onSelect,onMultiAdd,onCreateAdd}){
+  const [q,setQ]=useState('');
+  const [cat,setCat]=useState(null);
+  const [name,setName]=useState('');
+  const [newCat,setNewCat]=useState('Other');
+  const [tab,setTab]=useState('pick');
+  const [multiSelect,setMultiSelect]=useState(false);
+  const [selected,setSelected]=useState(new Set());
+  const qRef=useRef();
+  const longPressTimer=useRef(null);
+  const longPressActivated=useRef(false);
+
+  useEffect(()=>{ qRef.current?.focus(); },[]);
+
+  // Names already assigned to this column
+  const takenInCol=new Set(
+    assignments.filter(a=>a.locationId===locId).map(a=>{
+      const item=items.find(i=>i.id===a.itemId);
+      return item?.name.toLowerCase();
+    }).filter(Boolean)
+  );
+
+  // Merge trip items + ITEM_TPLS master list, deduplicated by name
+  const tripItemNames=new Set(items.map(i=>i.name.toLowerCase()));
+  const masterExtras=ITEM_TPLS
+    .filter(([n])=>!tripItemNames.has(n.toLowerCase()))
+    .map(([n,c,w])=>({id:'__tpl__'+n,name:n,category:c,weight:w,_fromMaster:true}));
+  const allItems=[...items,...masterExtras];
+
+  // All available categories (from unfiltered pool) — normalise Custom→Other
+  const available=allItems.filter(i=>!takenInCol.has(i.name.toLowerCase()));
+  const categories=[...new Set(available.map(i=>normCat(i.category)))].sort();
+
+  // Apply search + category filter together
+  const filtered=available.filter(i=>
+    (!cat||normCat(i.category)===cat)&&
+    i.name.toLowerCase().includes(q.toLowerCase())
+  );
+  const grouped=filtered.reduce((acc,i)=>{
+    const c=normCat(i.category);
+    (acc[c]=acc[c]||[]).push(i);return acc;
+  },{});
+
+  const toggleSelected=(id)=>{
+    setSelected(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});
+  };
+
+  const exitMultiSelect=()=>{setMultiSelect(false);setSelected(new Set());};
+
+  const handleItemClick=(item)=>{
+    if(longPressActivated.current){longPressActivated.current=false;return;}
+    if(multiSelect){
+      toggleSelected(item.id);
+    }else{
+      if(item._fromMaster)onCreateAdd(item.name,item.category,item.weight);
+      else onSelect(item.id);
+    }
+  };
+
+  const startLongPress=(item)=>()=>{
+    longPressActivated.current=false;
+    longPressTimer.current=setTimeout(()=>{
+      longPressActivated.current=true;
+      setMultiSelect(true);
+      setSelected(new Set([item.id]));
+    },500);
+  };
+
+  const cancelLongPress=()=>{
+    if(longPressTimer.current){clearTimeout(longPressTimer.current);longPressTimer.current=null;}
+  };
+
+  const handleMultiAdd=()=>{
+    const selectedItems=[...selected].map(id=>allItems.find(i=>i.id===id)).filter(Boolean);
+    onMultiAdd(selectedItems);
+  };
+
+  return <Modal title={`Add to ${loc.name}`} onClose={onClose} w={440}>
+    <div style={{display:'flex',gap:6,marginBottom:14,alignItems:'center'}}>
+      <div style={{display:'flex',gap:6,flex:1}}>
+        {[['pick','Pick Item'],['new','New Item']].map(([v,l])=>(
+          <button key={v} onClick={()=>{setTab(v);exitMultiSelect();}} style={{padding:'5px 16px',borderRadius:20,
+            fontSize:12,fontWeight:600,border:'none',
+            background:tab===v?'var(--am)':'var(--sf2)',color:tab===v?'#1a0e00':'var(--tx2)'}}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {tab==='pick'&&<button onClick={()=>multiSelect?exitMultiSelect():setMultiSelect(true)}
+        style={{padding:'5px 12px',borderRadius:20,fontSize:12,fontWeight:600,border:'none',flexShrink:0,
+          background:multiSelect?'var(--sf3)':'var(--sf2)',
+          color:multiSelect?'var(--tx)':'var(--tx2)'}}>
+        {multiSelect?'Cancel':'Multi'}
+      </button>}
+    </div>
+
+    {tab==='pick'&&<>
+      <input ref={qRef} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search items…"
+        style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+          borderRadius:7,padding:'8px 12px',color:'var(--tx)',outline:'none',marginBottom:8}}/>
+      <CategoryFilter categories={categories} selected={cat} onSelect={c=>{setCat(c);}}/>
+      <div style={{maxHeight:multiSelect?260:310,overflowY:'auto',margin:'0 -24px',padding:'0 24px'}}>
+        {Object.entries(grouped).length===0
+          ?<div style={{textAlign:'center',color:'var(--tx3)',padding:'24px 0',fontSize:13}}>
+            {q||cat?'No matches — try clearing the filter':'All items already added to this location'}
+          </div>
+          :Object.entries(grouped).map(([c,catItems])=>(
+            <div key={c} style={{marginBottom:12}}>
+              {!cat&&<div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',
+                letterSpacing:1,fontWeight:600,marginBottom:4}}>{c}</div>}
+              {catItems.map(item=>(
+                <button key={item.id}
+                  onClick={()=>handleItemClick(item)}
+                  onTouchStart={startLongPress(item)}
+                  onTouchEnd={cancelLongPress}
+                  onTouchMove={cancelLongPress}
+                  onContextMenu={e=>e.preventDefault()}
+                  style={{display:'flex',alignItems:'center',width:'100%',
+                    padding:'8px 10px',borderRadius:6,textAlign:'left',
+                    fontSize:13,color:'var(--tx)',marginBottom:2,
+                    background:multiSelect&&selected.has(item.id)?'rgba(255,167,0,.08)':'transparent',
+                    transition:'background .1s'}}
+                  onMouseEnter={e=>{if(!(multiSelect&&selected.has(item.id)))e.currentTarget.style.background='var(--sf2)';}}
+                  onMouseLeave={e=>{e.currentTarget.style.background=multiSelect&&selected.has(item.id)?'rgba(255,167,0,.08)':'transparent';}}>
+                  {multiSelect&&<div style={{
+                    width:18,height:18,borderRadius:4,border:'2px solid',
+                    borderColor:selected.has(item.id)?'var(--am)':'var(--bd)',
+                    background:selected.has(item.id)?'var(--am)':'transparent',
+                    display:'flex',alignItems:'center',justifyContent:'center',
+                    marginRight:10,flexShrink:0,transition:'all .15s'}}>
+                    {selected.has(item.id)&&<span style={{color:'#1a0e00',fontSize:10,fontWeight:900,lineHeight:1}}>✓</span>}
+                  </div>}
+                  <span style={{flex:1}}>{item.name}</span>
+                  {item.weight&&<span style={{fontSize:11,color:'var(--tx3)',marginRight:8}}>{fmtW(item.weight)}</span>}
+                  {!multiSelect&&<span style={{color:'var(--tx3)',fontSize:15}}>+</span>}
+                </button>
+              ))}
+            </div>
+          ))
+        }
+      </div>
+      {multiSelect&&<div style={{paddingTop:10,borderTop:'1px solid var(--bd)',marginTop:4}}>
+        <button onClick={handleMultiAdd} disabled={selected.size===0}
+          style={{width:'100%',padding:'12px',borderRadius:8,
+            background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:14,
+            opacity:selected.size>0?1:.4,transition:'opacity .15s'}}>
+          {selected.size>0?`Add ${selected.size} item${selected.size!==1?'s':''}`:'Select items above'}
+        </button>
+      </div>}
+    </>}
+
+    {tab==='new'&&<div>
+      <div style={{fontSize:12,color:'var(--tx2)',marginBottom:10}}>
+        Create a new item and add it to <b style={{color:'var(--tx)'}}>{loc.name}</b>:
+      </div>
+      <input value={name} onChange={e=>setName(e.target.value)} autoFocus
+        onKeyDown={e=>e.key==='Enter'&&name.trim()&&onCreateAdd(name.trim(),newCat)}
+        placeholder="E.g. Silk Pyjamas…"
+        style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+          borderRadius:7,padding:'9px 12px',color:'var(--tx)',outline:'none',marginBottom:10}}/>
+      <div style={{fontSize:11,color:'var(--tx3)',marginBottom:6,textTransform:'uppercase',letterSpacing:.7}}>Category</div>
+      <CategoryPills value={newCat} onChange={setNewCat}/>
+      <button onClick={()=>name.trim()&&onCreateAdd(name.trim(),newCat)} disabled={!name.trim()}
+        style={{width:'100%',padding:'10px',borderRadius:7,background:'var(--am)',
+          color:'#1a0e00',fontWeight:700,fontSize:13,marginTop:12,opacity:name.trim()?1:.45}}>
+        Create & Add
+      </button>
+    </div>}
+  </Modal>;
+}
+
+/* ── SORT HELPERS ────────────────────────────────────────────────── */
+const SORT_OPTS=[
+  {v:'personal',l:'Personal'},
+  {v:'az',l:'A → Z'},
+  {v:'za',l:'Z → A'},
+  {v:'asc',l:'Lightest first'},
+  {v:'desc',l:'Heaviest first'},
+];
+
+// Generic sort base — takes field accessor functions
+const sortBy=(arr,sort,getName,getWeight)=>{
+  if(sort==='personal')return arr;
+  return[...arr].sort((a,b)=>{
+    const na=getName(a),nb=getName(b);
+    const wa=getWeight(a),wb=getWeight(b);
+    if(sort==='az')return na.localeCompare(nb);
+    if(sort==='za')return nb.localeCompare(na);
+    if(sort==='asc')return wa-wb;
+    if(sort==='desc')return wb-wa;
+    return 0;
+  });
+};
+
+// Sort assignment rows — item details via .item reference (board / summary)
+const sortAssignRows=(rows,sort)=>sortBy(rows,sort,a=>a.item?.name||'',a=>a.item?.weight??200);
+
+// Sort plain item objects (grid summary)
+const sortItems=(items,sort)=>sortBy(items,sort,a=>a.name,a=>a.weight??200);
+
+function SortControl({value,onChange}){
+  return <div style={{display:'flex',alignItems:'center',gap:6}}>
+    <span style={{fontSize:11,color:'var(--tx3)',flexShrink:0}}>Sort</span>
+    <select value={value} onChange={e=>onChange(e.target.value)}
+      style={{background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:6,
+        padding:'4px 8px',color:'var(--tx)',fontSize:12,outline:'none',cursor:'pointer'}}>
+      {SORT_OPTS.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}
+    </select>
+  </div>;
+}
+
+/* ── SUMMARY SUB-VIEWS ───────────────────────────────────────────── */
+
+function StatusDot({a}){
+  if(isFullyPacked(a)) return <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',
+      width:16,height:16,borderRadius:'50%',background:'var(--gn)',
+      color:'#0f1419',fontSize:10,fontWeight:700,flexShrink:0}}>✓</span>;
+  if(isPartiallyPacked(a)) return <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',
+      width:16,height:16,borderRadius:'50%',background:'var(--am)',
+      color:'#1a0e00',fontSize:9,fontWeight:700,flexShrink:0}}>½</span>;
+  return <span style={{display:'inline-block',width:16,height:16,borderRadius:'50%',
+      border:'1.5px solid var(--sf3)',flexShrink:0}}/>;
+}
+
+function ListView({groups,showWeight,sort}){
+  if(!groups.length) return <Empty/>;
+  return groups.map(({loc,rows,totalW})=>{
+    const unpacked=sortAssignRows(rows.filter(a=>!isFullyPacked(a)),sort);
+    const packed=sortAssignRows(rows.filter(a=>isFullyPacked(a)),sort);
+    const sortedRows=[...unpacked,...packed];
+    const lTotal=sortedRows.reduce((s,a)=>s+a.quantity,0);
+    const lPacked=sortedRows.reduce((s,a)=>s+getPackedQty(a),0);
+    return <div key={loc.id} style={{background:'var(--sf)',border:'1px solid var(--bd)',
+      borderTop:`3px solid ${loc.color}`,borderRadius:10,marginBottom:16,overflow:'hidden'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+        padding:'11px 16px',borderBottom:'1px solid var(--bd)'}}>
+        <div className="bb" style={{fontSize:17,color:loc.color}}>{loc.name}</div>
+        <div style={{display:'flex',gap:14,alignItems:'center'}}>
+          {showWeight&&<div style={{fontSize:13,fontWeight:700,color:'var(--tx2)'}}>~{fmtW(totalW)}</div>}
+          <div style={{fontSize:12,color:'var(--tx2)'}}>{lPacked}/{lTotal} packed</div>
+        </div>
+      </div>
+      <table style={{width:'100%',borderCollapse:'collapse'}}>
+        <thead>
+          <tr style={{background:'var(--sf2)'}}>
+            <th style={{padding:'7px 16px',width:28}}></th>
+            <th style={{padding:'7px 16px',textAlign:'left',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600}}>Item</th>
+            <th style={{padding:'7px 16px',textAlign:'center',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600,width:50}}>Qty</th>
+            {showWeight&&<th style={{padding:'7px 16px',textAlign:'right',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600,width:80}}>Weight</th>}
+            <th style={{padding:'7px 16px',textAlign:'center',fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600,width:88}}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedRows.map(a=>{
+            const rowW=(a.item?.weight??200)*a.quantity;
+            return <tr key={a.id} style={{borderTop:'1px solid var(--bd)',
+              background:isFullyPacked(a)?'rgba(63,214,138,.06)':isPartiallyPacked(a)?'rgba(245,166,35,.04)':'transparent'}}>
+              <td style={{padding:'8px 0 8px 16px',textAlign:'center'}}><StatusDot a={a}/></td>
+              <td style={{padding:'8px 16px',fontSize:13,color:'var(--tx)'}}>{a.item.name}</td>
+              <td style={{padding:'8px 16px',textAlign:'center',fontSize:13,fontWeight:700}}>{a.quantity}</td>
+              {showWeight&&<td style={{padding:'8px 16px',textAlign:'right',fontSize:12,color:'var(--tx3)'}}>{fmtW(rowW)}</td>}
+              <td style={{padding:'8px 16px',textAlign:'center'}}>
+                {isFullyPacked(a)
+                  ?<span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:4,
+                      textTransform:'uppercase',letterSpacing:.5,
+                      background:'rgba(63,214,138,.15)',color:'var(--gn)'}}>Packed</span>
+                  :isPartiallyPacked(a)
+                  ?<span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:4,
+                      textTransform:'uppercase',letterSpacing:.5,
+                      background:'rgba(245,166,35,.15)',color:'var(--am)'}}>
+                      {getPackedQty(a)}/{a.quantity}
+                    </span>
+                  :<span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:4,
+                      textTransform:'uppercase',letterSpacing:.5,
+                      background:'rgba(240,82,82,.1)',color:'var(--rd)'}}>To Pack</span>
+                }
+              </td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>;
+  });
+}
+
+function BoardSummary({groups,showWeight,sort}){
+  if(!groups.length) return <Empty/>;
+  return <div style={{display:'flex',gap:14,overflowX:'auto',paddingBottom:12,alignItems:'flex-start'}}>
+    {groups.map(({loc,rows,totalW})=>{
+      const unpacked=sortAssignRows(rows.filter(a=>!isFullyPacked(a)),sort);
+      const packed=sortAssignRows(rows.filter(a=>isFullyPacked(a)),sort);
+      const sortedRows=[...unpacked,...packed];
+      const lTotal=sortedRows.reduce((s,a)=>s+a.quantity,0);
+      const lPacked=sortedRows.reduce((s,a)=>s+getPackedQty(a),0);
+      const pct=lTotal>0?(lPacked/lTotal)*100:0;
+      return <div key={loc.id} style={{minWidth:210,flex:1,background:'var(--sf)',
+        border:'1px solid var(--bd)',borderTop:`3px solid ${loc.color}`,
+        borderRadius:10,overflow:'hidden',flexShrink:0}}>
+        <div style={{padding:'11px 14px 10px',borderBottom:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:4}}>
+            <div className="bb" style={{fontSize:16,color:loc.color}}>{loc.name}</div>
+            {showWeight&&<div style={{fontSize:13,fontWeight:700,color:'var(--tx2)'}}>~{fmtW(totalW)}</div>}
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--tx3)',marginBottom:6}}>
+            <span>{rows.length} item{rows.length!==1?'s':''}</span>
+            <span style={{color:pct===100?'var(--gn)':'var(--tx3)'}}>{lPacked}/{lTotal}</span>
+          </div>
+          <div style={{height:3,background:'var(--sf3)',borderRadius:2,overflow:'hidden'}}>
+            <div style={{height:'100%',borderRadius:2,width:`${pct}%`,background:pct===100?'var(--gn)':loc.color}}/>
+          </div>
+        </div>
+        <div>
+          {sortedRows.map(a=>(
+            <div key={a.id} style={{display:'flex',alignItems:'center',gap:9,
+              padding:'7px 14px',borderBottom:'1px solid var(--bd)',
+              background:isFullyPacked(a)?'rgba(63,214,138,.05)':isPartiallyPacked(a)?'rgba(245,166,35,.04)':'transparent'}}>
+              <StatusDot a={a}/>
+              <span style={{flex:1,fontSize:12,color:'var(--tx)',
+                textDecoration:isFullyPacked(a)?'line-through':'none'}}>{a.item.name}</span>
+              <span style={{fontSize:12,fontWeight:700,color:'var(--tx2)',flexShrink:0}}>
+                {isPartiallyPacked(a)?`${getPackedQty(a)}/`:''}{a.quantity}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>;
+    })}
+  </div>;
+}
+
+function GridSummary({trip,showWeight,sort}){
+  const locs=trip.locations;
+  const assignedItems=trip.items.filter(item=>trip.assignments.some(a=>a.itemId===item.id));
+  if(!assignedItems.length) return <Empty/>;
+
+  const byCategory=assignedItems.reduce((acc,item)=>{
+    const cat=normCat(item.category);
+    (acc[cat]=acc[cat]||[]).push(item);return acc;
+  },{});
+  // Sort within each category group
+  Object.keys(byCategory).forEach(cat=>{
+    byCategory[cat]=sortItems(byCategory[cat],sort);
+  });
+
+  const locStats=locs.map(loc=>{
+    const la=trip.assignments.filter(a=>a.locationId===loc.id);
+    const contentsW=la.reduce((s,a)=>{const it=trip.items.find(i=>i.id===a.itemId);return s+(it?.weight??200)*a.quantity;},0);
+    const totalW=(loc.bagWeight??0)+contentsW;
+    return{
+      total:la.reduce((s,a)=>s+a.quantity,0),
+      packed:la.reduce((s,a)=>s+getPackedQty(a),0),
+      totalW,
+    };
+  });
+
+  const cell=(item,loc)=>{
+    const a=trip.assignments.find(x=>x.itemId===item.id&&x.locationId===loc.id);
+    if(!a) return <td key={loc.id} style={{padding:'5px 8px',textAlign:'center',
+      border:'1px solid var(--bd)',color:'var(--tx3)',fontSize:11}}>–</td>;
+    const pqty=getPackedQty(a);
+    const full=isFullyPacked(a);
+    const partial=isPartiallyPacked(a);
+    return <td key={loc.id} style={{padding:'5px 8px',textAlign:'center',border:'1px solid var(--bd)',
+      background:full?'rgba(63,214,138,.12)':partial?'rgba(245,166,35,.08)':loc.color+'18'}}>
+      <span style={{fontWeight:700,fontSize:12,color:full?'var(--gn)':partial?'var(--am)':loc.color}}>
+        {partial?`${pqty}/${a.quantity}`:a.quantity}{full?' ✓':''}
+      </span>
+    </td>;
+  };
+
+  const thStyle={padding:'7px 10px',textAlign:'center',background:'var(--sf2)',
+    border:'1px solid var(--bd)',fontSize:11,fontWeight:700,whiteSpace:'nowrap'};
+
+  return <div style={{overflowX:'auto'}}>
+    <table style={{borderCollapse:'collapse',fontSize:12,width:'100%'}}>
+      <thead>
+        <tr>
+          <th style={{...thStyle,textAlign:'left',minWidth:160,position:'sticky',left:0,
+            fontSize:10,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,fontWeight:600}}>
+            Item
+          </th>
+          {locs.map((loc,i)=>(
+            <th key={loc.id} style={{...thStyle,color:loc.color,minWidth:90}}>
+              {loc.name}
+              <div style={{fontSize:9,color:'var(--tx3)',fontWeight:400,marginTop:1}}>
+                {locStats[i].packed}/{locStats[i].total}
+              </div>
+              {showWeight&&<div style={{fontSize:9,color:loc.color,fontWeight:600,marginTop:1}}>
+                ~{fmtW(locStats[i].totalW)}
+              </div>}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {Object.entries(byCategory).map(([cat,catItems])=>(
+          <React.Fragment key={cat}>
+            <tr>
+              <td style={{padding:'4px 12px',background:'var(--sf3)',
+                fontSize:9,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,
+                fontWeight:700,border:'1px solid var(--bd)',
+                position:'sticky',left:0,zIndex:1}}>
+                {cat}
+              </td>
+              {locs.map(loc=>(
+                <td key={loc.id} style={{background:'var(--sf3)',border:'1px solid var(--bd)'}}/>
+              ))}
+            </tr>
+            {catItems.map(item=>(
+              <tr key={item.id}>
+                <td style={{padding:'5px 12px',border:'1px solid var(--bd)',fontSize:12,
+                  color:'var(--tx)',background:'var(--sf)',position:'sticky',left:0}}>
+                  <div>{item.name}</div>
+                  {showWeight&&<div style={{fontSize:9,color:'var(--tx3)'}}>{fmtW(item.weight??200)} ea</div>}
+                </td>
+                {locs.map(loc=>cell(item,loc))}
+              </tr>
+            ))}
+          </React.Fragment>
+        ))}
+      </tbody>
+    </table>
+    <div style={{marginTop:10,fontSize:11,color:'var(--tx3)'}}>
+      Numbers show quantity · ✓ = packed · – = not assigned to this location{showWeight?' · weights include bag tare':''}
+    </div>
+  </div>;
+}
+
+function Empty(){
+  return <div style={{textAlign:'center',color:'var(--tx3)',padding:'48px 0',fontSize:14}}>
+    No items assigned yet. Head to Board view to start packing.
+  </div>;
+}
+
+/* ── SUMMARY ─────────────────────────────────────────────────────── */
+function Summary({trip,onResetPacked}){
+  const [sumView,setSumView]=useState('list');
+  const [showWeight,setShowWeight]=useState(true);
+  const [sort,setSort]=useState('personal');
+  const{ask:confirm,el:confirmEl}=useConfirm();
+  const totalItems=trip.assignments.reduce((s,a)=>s+a.quantity,0);
+  const packedItems=trip.assignments.reduce((s,a)=>s+getPackedQty(a),0);
+  const pct=totalItems>0?(packedItems/totalItems)*100:0;
+
+  // Compute total weight across all locations (contents only, no double-counting bags)
+  const grandW=trip.locations.reduce((tot,loc)=>{
+    const bagW=loc.bagWeight??0;
+    const contW=trip.assignments
+      .filter(a=>a.locationId===loc.id)
+      .reduce((s,a)=>{const it=trip.items.find(i=>i.id===a.itemId);return it?s+(it.weight??200)*a.quantity:s;},0);
+    return tot+bagW+contW;
+  },0);
+
+  const groups=trip.locations.map(loc=>{
+    const bagW=loc.bagWeight??0;
+    const rows=trip.assignments
+      .filter(a=>a.locationId===loc.id)
+      .map(a=>({...a,item:trip.items.find(i=>i.id===a.itemId)}))
+      .filter(a=>a.item)
+      .sort((a,b)=>(isFullyPacked(a)?1:0)-(isFullyPacked(b)?1:0));
+    const contW=rows.reduce((s,a)=>s+(a.item?.weight??200)*a.quantity,0);
+    return{loc,rows,totalW:bagW+contW};
+  }).filter(g=>g.rows.length>0);
+
+  const viewOpts=[['list','List'],['board','Columns'],['grid','Grid']];
+
+  return <div className="print-scroll" style={{flex:1,overflowY:'auto',padding:'24px 28px',paddingBottom:'calc(24px + env(safe-area-inset-bottom))'}}>
+    {confirmEl}
+    <div style={{maxWidth:sumView==='grid'?'100%':sumView==='board'?'100%':740,margin:'0 auto'}}>
+
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+        marginBottom:20,flexWrap:'wrap',gap:10}} className="np">
+        <div className="bb" style={{fontSize:28,color:'var(--am)'}}>Packing Summary</div>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+          <div style={{display:'flex',background:'var(--sf2)',borderRadius:7,
+            border:'1px solid var(--bd)',padding:2}}>
+            {viewOpts.map(([v,l])=>(
+              <button key={v} onClick={()=>setSumView(v)} style={{padding:'4px 13px',borderRadius:5,
+                fontSize:12,fontWeight:600,
+                background:sumView===v?'var(--sf3)':'transparent',
+                color:sumView===v?'var(--tx)':'var(--tx2)'}}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <SortControl value={sort} onChange={setSort}/>
+          <button onClick={()=>setShowWeight(w=>!w)}
+            style={{padding:'5px 12px',borderRadius:6,fontSize:12,fontWeight:600,
+              background:showWeight?'var(--am-bg)':'var(--sf2)',
+              border:`1px solid ${showWeight?'var(--am)':'var(--bd)'}`,
+              color:showWeight?'var(--am)':'var(--tx2)'}}>
+            ⚖ Weights {showWeight?'On':'Off'}
+          </button>
+          <button onClick={()=>confirm('Reset all items to unpacked? This cannot be undone.',onResetPacked,true)}
+            style={{padding:'5px 12px',borderRadius:6,fontSize:12,fontWeight:600,
+              background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)'}}>
+            ↺ Reset Packed
+          </button>
+          <button onClick={()=>window.print()} style={{padding:'8px 16px',borderRadius:7,
+            background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:13}}>
+            🖨 Print / Save PDF
+          </button>
+        </div>
+      </div>
+
+      {/* Overview bar */}
+      <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,
+        padding:'14px 18px',marginBottom:20}}>
+        <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:700}}>{trip.name}</div>
+            <div style={{fontSize:12,color:'var(--tx2)',marginTop:2}}>
+              {packedItems}/{totalItems} packed · {trip.assignments.length} item types · {trip.locations.length} locations
+              {showWeight&&<span style={{color:'var(--am)',fontWeight:600}}> · ~{fmtW(grandW)} total</span>}
+            </div>
+          </div>
+          <div style={{flex:1,minWidth:120}}>
+            <div style={{display:'flex',gap:6,alignItems:'center'}}>
+              <div style={{flex:1,height:6,background:'var(--sf3)',borderRadius:3,overflow:'hidden'}}>
+                <div style={{height:'100%',borderRadius:3,transition:'width .3s',
+                  width:`${pct}%`,background:pct===100?'var(--gn)':'var(--am)'}}/>
+              </div>
+              <span style={{fontSize:12,color:'var(--tx2)',flexShrink:0}}>{Math.round(pct)}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Grid hint */}
+      {sumView==='grid'&&<div style={{fontSize:12,color:'var(--tx3)',marginBottom:12}} className="np">
+        Tip: most compact for printing — use "Fit to page" in your browser print dialog.
+      </div>}
+
+      {sumView==='list'&&<ListView groups={groups} showWeight={showWeight} sort={sort}/>}
+      {sumView==='board'&&<BoardSummary groups={groups} showWeight={showWeight} sort={sort}/>}
+      {sumView==='grid'&&<GridSummary trip={trip} showWeight={showWeight} sort={sort}/>}
+    </div>
+  </div>;
+}
+
+/* ── WEIGHT LIMIT MODAL ──────────────────────────────────────────── */
+function WeightLimitModal({loc,onClose,onSave}){
+  const [val,setVal]=useState(String(loc?.weightLimit??''));
+  const iRef=useRef();
+  useEffect(()=>{iRef.current?.focus();iRef.current?.select();},[]);
+  const save=()=>{
+    const v=parseInt(val);
+    onSave(!isNaN(v)&&v>0?v:null); // null = no limit
+  };
+  const presets=[
+    ['No limit',null],
+    ['7kg — Carry-On (Standard)',7000],
+    ['10kg — Carry-On (Generous)',10000],
+    ['20kg — Checked (Budget)',20000],
+    ['23kg — Checked (Standard)',23000],
+    ['25kg — Checked (Generous)',25000],
+    ['32kg — Checked (Maximum)',32000],
+  ];
+  return <Modal title={`Weight Limit — ${loc?.name}`} onClose={onClose}>
+    <div style={{fontSize:12,color:'var(--tx2)',marginBottom:10}}>
+      Set a maximum weight for this bag. PACKR will warn you when you exceed it. Leave blank for no limit.
+    </div>
+    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:14}}>
+      <input ref={iRef} value={val} onChange={e=>setVal(e.target.value.replace(/\D/g,''))}
+        onKeyDown={e=>e.key==='Enter'&&save()} placeholder="e.g. 10000"
+        style={{flex:1,background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:7,
+          padding:'9px 12px',color:'var(--tx)',outline:'none',fontSize:16,fontWeight:700,textAlign:'center'}}/>
+      <span style={{fontSize:14,color:'var(--tx2)',flexShrink:0}}>grams</span>
+    </div>
+    <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
+      {presets.map(([l,v])=>(
+        <button key={l} onClick={()=>setVal(v===null?'':String(v))}
+          style={{padding:'4px 10px',borderRadius:5,fontSize:11,fontWeight:600,
+            background:val===(v===null?'':String(v))?'var(--am)':'var(--sf2)',
+            color:val===(v===null?'':String(v))?'#1a0e00':'var(--tx2)',
+            border:`1px solid ${val===(v===null?'':String(v))?'var(--am)':'var(--bd)'}`}}>
+          {l}
+        </button>
+      ))}
+    </div>
+    <button onClick={save} style={{width:'100%',padding:'10px',borderRadius:7,
+      background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:13}}>Save</button>
+  </Modal>;
+}
+
+/* ── BAG WEIGHT MODAL ────────────────────────────────────────────── */
+function BagWeightModal({loc,onClose,onSave}){
+  const [val,setVal]=useState(String(loc?.bagWeight??0));
+  const iRef=useRef();
+  useEffect(()=>{iRef.current?.focus();iRef.current?.select();},[]);
+  const save=()=>{const v=parseInt(val);onSave(!isNaN(v)&&v>=0?v:0);};
+  return <Modal title={`Bag Weight — ${loc?.name}`} onClose={onClose}>
+    <div style={{fontSize:12,color:'var(--tx2)',marginBottom:10}}>
+      Tare weight of the empty bag itself (grams). This is added to the contents weight to give the total load.
+    </div>
+    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:16}}>
+      <input ref={iRef} value={val} onChange={e=>setVal(e.target.value.replace(/\D/g,''))}
+        onKeyDown={e=>e.key==='Enter'&&save()}
+        style={{flex:1,background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:7,
+          padding:'9px 12px',color:'var(--tx)',outline:'none',fontSize:16,fontWeight:700,textAlign:'center'}}/>
+      <span style={{fontSize:14,color:'var(--tx2)',flexShrink:0}}>grams</span>
+    </div>
+    <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}}>
+      {[['No bag',0],['Tote',300],['Daypack',400],['Carry-on',1800],['Check-in (soft)',2500],['Check-in (hard)',3500]].map(([l,v])=>(
+        <button key={l} onClick={()=>setVal(String(v))}
+          style={{padding:'4px 10px',borderRadius:5,fontSize:11,fontWeight:600,
+            background:val===String(v)?'var(--am)':'var(--sf2)',
+            color:val===String(v)?'#1a0e00':'var(--tx2)',
+            border:`1px solid ${val===String(v)?'var(--am)':'var(--bd)'}`}}>
+          {l} {v>0?`(${fmtW(v)})` :''}
+        </button>
+      ))}
+    </div>
+    <button onClick={save} style={{width:'100%',padding:'10px',borderRadius:7,background:'var(--am)',
+      color:'#1a0e00',fontWeight:700,fontSize:13}}>Save</button>
+  </Modal>;
+}
+
+/* ── BOARD ───────────────────────────────────────────────────────── */
+function Board({trip,onAdd,onQty,onSetPackedQty,onOpen,onAddLoc,onRenameLoc,onSetBagWeight,onSetWeightLimit,onDelLoc,onReorder,onPackAll,onUnpackAll,onReorderLoc}){
+  const [activeIdx,setActiveIdx]=useState(0);
+  const [sort,setSort]=useState('personal');
+  const scrollRef=useRef();
+
+  const onScroll=()=>{
+    const el=scrollRef.current;
+    if(!el)return;
+    const colW=el.clientWidth;
+    setActiveIdx(Math.round(el.scrollLeft/colW));
+  };
+
+  return <div style={{flex:1,display:'flex',flexDirection:'column',minHeight:0}}>
+    {/* Sort bar */}
+    <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',
+      padding:'5px 12px',borderBottom:'1px solid var(--bd)',flexShrink:0,gap:8}} className="np">
+      <SortControl value={sort} onChange={setSort}/>
+      {sort!=='personal'&&<span style={{fontSize:11,color:'var(--tx3)'}} className="sort-hint">
+        Drag unavailable when sorted
+      </span>}
+    </div>
+    <div ref={scrollRef} className="board-container" onScroll={onScroll}>
+      {trip.locations.length===0&&<div style={{display:'flex',alignItems:'center',justifyContent:'center',
+        flex:1,flexDirection:'column',gap:12,color:'var(--tx3)',padding:40,minWidth:'100%'}}>
+        <div style={{fontSize:32}}>📦</div>
+        <div style={{fontSize:15,fontWeight:600,color:'var(--tx)'}}>No locations yet</div>
+        <div style={{fontSize:13,textAlign:'center'}}>Add a location (e.g. Carry-on, Checked Bag) to start organising your packing.</div>
+        <button onClick={onAddLoc} style={{marginTop:8,padding:'9px 20px',borderRadius:8,
+          background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:13}}>
+          + Add Location
+        </button>
+      </div>}
+      {trip.locations.map(loc=>(
+        <LocCol key={loc.id} loc={loc} items={trip.items} assignments={trip.assignments}
+          onAdd={()=>onAdd(loc.id)} onQty={onQty}
+          onSetPackedQty={onSetPackedQty}
+          onOpen={onOpen}
+          onRename={()=>onRenameLoc(loc.id)}
+          onSetBagWeight={()=>onSetBagWeight(loc.id)}
+          onSetWeightLimit={()=>onSetWeightLimit(loc.id)}
+          onDel={()=>onDelLoc(loc.id)}
+          onReorder={onReorder}
+          onPackAll={()=>onPackAll(loc.id)}
+          onUnpackAll={()=>onUnpackAll(loc.id)}
+          isFirst={trip.locations.indexOf(loc)===0}
+          isLast={trip.locations.indexOf(loc)===trip.locations.length-1}
+          onMoveLeft={()=>onReorderLoc(loc.id,'left')}
+          onMoveRight={()=>onReorderLoc(loc.id,'right')}
+          sort={sort}/>
+      ))}
+      <button onClick={onAddLoc} className="board-add-loc"
+        style={{width:200,flexShrink:0,alignSelf:'flex-start',
+          border:'1px dashed var(--bd)',borderRadius:10,padding:20,color:'var(--tx3)',
+          fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+        <span style={{fontSize:20}}>+</span> Add Location
+      </button>
+    </div>
+    {/* Scroll dots — mobile only */}
+    {trip.locations.length>1&&<div style={{display:'flex',justifyContent:'center',gap:6,
+      padding:'8px 0 4px',flexShrink:0}} className="mob-dots">
+      {trip.locations.map((loc,i)=>(
+        <div key={loc.id} style={{width:i===activeIdx?20:6,height:6,borderRadius:3,
+          transition:'all .2s',background:i===activeIdx?loc.color:'var(--sf3)'}}/>
+      ))}
+    </div>}
+  </div>;
+}
+
+/* ── SAVE INDICATOR ──────────────────────────────────────────────── */
+function SaveIndicator({status}){
+  if(status==='idle')return null;
+  const cfg={
+    saving:{text:'Saving…',color:'var(--tx3)'},
+    saved: {text:'✓ Saved', color:'var(--gn)'},
+    error: {text:'⚠ Save failed',color:'var(--rd)'},
+    unsaved:{text:'⚠ Not saved. Will retry',color:'var(--rd)'},
+  }[status]||{};
+  return <span style={{fontSize:11,color:cfg.color,marginRight:10,
+    transition:'opacity .3s',whiteSpace:'nowrap'}}>{cfg.text}</span>;
+}
+
+/* ── CHANGE PASSWORD MODAL ───────────────────────────────────────── */
+/* ── DELETE ACCOUNT MODAL ────────────────────────────────────────── */
+function DeleteAccountModal({onClose,onDeleted}){
+  const [step,setStep]=useState(1); // 1=warning, 2=confirm
+  const [val,setVal]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState('');
+
+  const doDelete=async()=>{
+    setLoading(true);setErr('');
+    try{
+      await api('DELETE','/me');
+      onDeleted();
+    }catch(e){
+      setErr(e.message||'Something went wrong. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  return <Modal title="Delete Account" onClose={onClose}>
+    {step===1&&<>
+      <div style={{fontSize:13,color:'var(--tx)',lineHeight:1.6,marginBottom:16}}>
+        This will <strong>permanently delete your account and all your trips and templates</strong>. This cannot be undone.
+      </div>
+      <div style={{fontSize:12,color:'var(--tx3)',padding:'10px 12px',background:'var(--sf2)',
+        borderRadius:7,marginBottom:20,lineHeight:1.5}}>
+        Your email address will be freed up and you will be fully removed from the system.
+      </div>
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={onClose} style={{flex:1,padding:'10px',borderRadius:7,
+          background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:13,color:'var(--tx2)'}}>
+          Cancel
+        </button>
+        <button onClick={()=>setStep(2)} style={{flex:1,padding:'10px',borderRadius:7,
+          background:'rgba(240,82,82,.12)',border:'1px solid rgba(240,82,82,.3)',
+          fontSize:13,fontWeight:700,color:'var(--rd)'}}>
+          Continue
+        </button>
+      </div>
+    </>}
+    {step===2&&<>
+      <div style={{fontSize:13,color:'var(--tx)',marginBottom:12,lineHeight:1.6}}>
+        Type <strong style={{color:'var(--rd)'}}>DELETE</strong> to confirm you want to permanently delete all your data.
+      </div>
+      <input value={val} onChange={e=>setVal(e.target.value)} autoFocus
+        placeholder="Type DELETE"
+        style={{width:'100%',background:'var(--sf2)',border:`1px solid ${val==='DELETE'?'var(--rd)':'var(--bd)'}`,
+          borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none',marginBottom:12,
+          textAlign:'center',fontSize:16,fontWeight:700,letterSpacing:2}}/>
+      {err&&<div style={{fontSize:12,color:'var(--rd)',marginBottom:10}}>{err}</div>}
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={()=>{setStep(1);setVal('');}} style={{flex:1,padding:'10px',borderRadius:7,
+          background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:13,color:'var(--tx2)'}}>
+          Back
+        </button>
+        <button onClick={doDelete} disabled={val!=='DELETE'||loading}
+          style={{flex:1,padding:'10px',borderRadius:7,fontSize:13,fontWeight:700,
+            background:'rgba(240,82,82,.12)',border:'1px solid rgba(240,82,82,.3)',
+            color:'var(--rd)',opacity:val==='DELETE'&&!loading?1:.45}}>
+          {loading?'Deleting…':'Delete Everything'}
+        </button>
+      </div>
+    </>}
+  </Modal>;
+}
+
+/* ── USER MENU (cog) ─────────────────────────────────────────────── */
+function UserMenu({user,onUpdate,onSignOut,onDeleteAccount}){
+  const [open,setOpen]=useState(false);
+  const ref=useRef();
+  useEffect(()=>{
+    if(!open)return;
+    const fn=e=>{if(!ref.current?.contains(e.target))setOpen(false);};
+    document.addEventListener('mousedown',fn);
+    return()=>document.removeEventListener('mousedown',fn);
+  },[open]);
+
+  return <div ref={ref} style={{position:'relative',display:'flex',alignItems:'center',gap:4}}>
+    <DisplayName user={user} onUpdate={onUpdate}/>
+    <button onClick={()=>setOpen(o=>!o)}
+      title="Account settings"
+      style={{width:28,height:28,borderRadius:6,fontSize:15,
+        display:'flex',alignItems:'center',justifyContent:'center',
+        background:open?'var(--sf3)':'transparent',
+        border:'1px solid '+(open?'var(--bd)':'transparent'),
+        color:'var(--tx3)',
+        transition:'all .15s'}}
+      onMouseEnter={e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.borderColor='var(--bd)';}}
+      onMouseLeave={e=>{if(!open){e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent';}}}>
+      ⚙
+    </button>
+    {open&&<div style={{position:'absolute',right:0,top:'calc(100% + 6px)',
+      background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:9,
+      boxShadow:'0 8px 32px rgba(0,0,0,.5)',zIndex:300,minWidth:180,overflow:'hidden'}}>
+      <button onClick={()=>{setOpen(false);onSignOut();}}
+        style={{display:'block',width:'100%',padding:'11px 16px',fontSize:13,
+          color:'var(--tx)',textAlign:'left'}}>
+        Sign Out
+      </button>
+      <div style={{height:1,background:'var(--bd)'}}/>
+      <button onClick={()=>{setOpen(false);onDeleteAccount();}}
+        style={{display:'block',width:'100%',padding:'11px 16px',fontSize:13,
+          color:'var(--rd)',textAlign:'left'}}>
+        Delete Account
+      </button>
+    </div>}
+  </div>;
+}
+function DisplayName({user,onUpdate}){
+  const [editing,setEditing]=useState(false);
+  const [val,setVal]=useState('');
+  const [feedback,setFeedback]=useState(''); // '' | 'saving' | 'saved' | 'error'
+  const iRef=useRef();
+  const displayName=user?.user_metadata?.display_name||user?.email||'';
+
+  const start=()=>{setVal(user?.user_metadata?.display_name||'');setEditing(true);};
+  const save=async()=>{
+    const v=val.trim();
+    setEditing(false);
+    if(!v||v===(user?.user_metadata?.display_name||''))return;
+    setFeedback('saving');
+    try{
+      const u=await api('PATCH','/me',{displayName:v});
+      onUpdate(toUser(u));
+      setFeedback('saved');
+      setTimeout(()=>setFeedback(''),2000);
+    }catch{
+      setFeedback('error');
+      setTimeout(()=>setFeedback(''),3000);
+    }
+  };
+  useEffect(()=>{if(editing)iRef.current?.focus();},[editing]);
+
+  const feedbackColor={saving:'var(--tx3)',saved:'var(--gn)',error:'var(--rd)'}[feedback];
+
+  if(editing) return (
+    <input ref={iRef} value={val} onChange={e=>setVal(e.target.value)}
+      onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape')setEditing(false);}}
+      onBlur={save} placeholder="Your name"
+      style={{fontSize:12,background:'var(--sf2)',border:'1px solid var(--am)',
+        borderRadius:6,padding:'3px 9px',color:'var(--tx)',outline:'none',width:140}}/>
+  );
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:4}}>
+      {feedback&&<span style={{fontSize:10,color:feedbackColor}}>
+        {feedback==='saving'?'…':feedback==='saved'?'✓':'⚠'}
+      </span>}
+      <button onClick={start} title="Click to set display name"
+        style={{fontSize:12,color:'var(--tx3)',padding:'3px 8px',borderRadius:5,
+          maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+          transition:'background .12s'}}
+        onMouseEnter={e=>e.currentTarget.style.background='var(--sf2)'}
+        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+        {displayName} ✎
+      </button>
+    </div>
+  );
+}
+
+/* ── TRIP HEADER ─────────────────────────────────────────────────── */
+function TripHeader({trip,onHome,onRename,onSignOut,onDeleteAccount,user,onUpdateUser,onSaveTemplate,onApplyTemplate,saveStatus,view,onView}){
+  const [editing,setEditing]=useState(false);
+  const [val,setVal]=useState('');
+  const [mobileMenu,setMobileMenu]=useState(false);
+  const iRef=useRef();
+  const mRef=useRef();
+
+  const startEdit=()=>{setVal(trip.name);setEditing(true);};
+  const save=()=>{if(val.trim()&&val.trim()!==trip.name)onRename(val.trim());setEditing(false);};
+  useEffect(()=>{if(editing)iRef.current?.focus();},[editing]);
+  useEffect(()=>{
+    if(!mobileMenu)return;
+    const fn=e=>{if(!mRef.current?.contains(e.target))setMobileMenu(false);};
+    document.addEventListener('mousedown',fn);
+    return()=>document.removeEventListener('mousedown',fn);
+  },[mobileMenu]);
+
+  const tripNameEl = editing
+    ?<input ref={iRef} value={val} onChange={e=>setVal(e.target.value)}
+        onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape')setEditing(false);}}
+        onBlur={save}
+        style={{fontSize:14,fontWeight:600,background:'var(--sf2)',border:'1px solid var(--am)',
+          borderRadius:6,padding:'3px 8px',color:'var(--tx)',outline:'none',maxWidth:200,minWidth:80}}/>
+    :<button onClick={startEdit} title="Click to rename"
+        style={{fontSize:14,fontWeight:600,color:'var(--tx2)',maxWidth:200,padding:'3px 7px',
+          borderRadius:5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+          transition:'background .12s',textAlign:'left'}}
+        onMouseEnter={e=>e.currentTarget.style.background='var(--sf2)'}
+        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+        {trip.name} <span style={{fontSize:11,color:'var(--tx3)',marginLeft:2}}>✎</span>
+      </button>;
+
+  return <div className="np" style={{display:'flex',alignItems:'center',gap:8,
+    padding:'0 12px',height:54,background:'var(--sf)',
+    borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+
+    {/* Logo */}
+    <button onClick={onHome} className="bb"
+      style={{fontSize:22,color:'var(--am)',letterSpacing:3,padding:0,flexShrink:0,transition:'opacity .15s'}}
+      onMouseEnter={e=>e.currentTarget.style.opacity='.65'}
+      onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+      PACKR
+    </button>
+    <span style={{color:'var(--bd)',fontSize:16,userSelect:'none',flexShrink:0}}>/</span>
+    {tripNameEl}
+
+    {/* View toggle */}
+    <div style={{display:'flex',background:'var(--sf2)',borderRadius:7,
+      border:'1px solid var(--bd)',padding:2,flexShrink:0}}>
+      {[['board','Locations'],['summary','Summary']].map(([v,l])=>(
+        <button key={v} onClick={()=>onView(v)} style={{padding:'4px 10px',borderRadius:5,
+          fontSize:12,fontWeight:600,
+          background:view===v?'var(--sf3)':'transparent',
+          color:view===v?'var(--tx)':'var(--tx2)'}}>
+          {l}
+        </button>
+      ))}
+    </div>
+
+    <div style={{flex:1}}/>
+
+    {/* Desktop buttons */}
+    <div className="hdr-desktop">
+      <button onClick={onApplyTemplate} style={{padding:'5px 10px',borderRadius:6,fontSize:12,
+        background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)'}}>⚡ Apply Template</button>
+      <button onClick={onSaveTemplate} style={{padding:'5px 10px',borderRadius:6,fontSize:12,
+        background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--am)'}}>+ Save Template</button>
+      <div style={{width:1,height:20,background:'var(--bd)'}}/>
+      <SaveIndicator status={saveStatus}/>
+      <UserMenu user={user} onUpdate={onUpdateUser}
+        onSignOut={onSignOut}
+        onDeleteAccount={onDeleteAccount}/>
+    </div>
+
+    {/* Mobile overflow menu */}
+    <div className="hdr-mobile-menu" ref={mRef} style={{position:'relative',display:'flex',alignItems:'center',gap:6}}>
+      <SaveIndicator status={saveStatus}/>
+      <button onClick={()=>setMobileMenu(m=>!m)}
+        style={{width:36,height:36,borderRadius:8,background:mobileMenu?'var(--sf3)':'var(--sf2)',
+          border:'1px solid var(--bd)',fontSize:18,display:'flex',alignItems:'center',justifyContent:'center'}}>
+        ⋯
+      </button>
+      {mobileMenu&&<div style={{position:'absolute',right:0,top:'calc(100% + 6px)',
+        background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,
+        zIndex:300,width:210,boxShadow:'0 12px 32px rgba(0,0,0,.7)',overflow:'hidden'}}>
+        <div style={{padding:'10px 14px 6px',fontSize:10,color:'var(--tx3)',
+          textTransform:'uppercase',letterSpacing:1}}>
+          <DisplayName user={user} onUpdate={u=>{onUpdateUser(u);setMobileMenu(false);}}/>
+        </div>
+        <div style={{height:1,background:'var(--bd)',margin:'6px 0'}}/>
+        {[
+          ['⚡ Apply Template', onApplyTemplate, 'var(--tx)'],
+          ['+ Save Template',   onSaveTemplate,  'var(--am)'],
+        ].map(([l,fn,c])=>(
+          <button key={l} onClick={()=>{fn();setMobileMenu(false);}}
+            style={{display:'block',width:'100%',padding:'11px 14px',fontSize:13,
+              color:c,textAlign:'left'}}>
+            {l}
+          </button>
+        ))}
+        <div style={{height:1,background:'var(--bd)'}}/>
+        <button onClick={()=>{onSignOut();setMobileMenu(false);}}
+          style={{display:'block',width:'100%',padding:'11px 14px',fontSize:13,
+            color:'var(--tx)',textAlign:'left'}}>
+          Sign Out
+        </button>
+        <div style={{height:1,background:'var(--bd)'}}/>
+        <button onClick={()=>{setMobileMenu(false);onDeleteAccount();}}
+          style={{display:'block',width:'100%',padding:'11px 14px',fontSize:13,
+            color:'var(--rd)',textAlign:'left'}}>
+          Delete Account
+        </button>
+      </div>}
+    </div>
+  </div>;
+}
+
+/* ── TEMPLATE ITEM PICKER ────────────────────────────────────────── */
+function TemplateItemPicker({locName,takenNames,onClose,onAdd}){
+  const [q,setQ]=useState('');
+  const [cat,setCat]=useState(null);
+  const [tab,setTab]=useState('pick');
+  const [customName,setCustomName]=useState('');
+  const [newCat,setNewCat]=useState('Other');
+  const [lastAdded,setLastAdded]=useState('');
+  const qRef=useRef();
+  const cRef=useRef();
+  useEffect(()=>{qRef.current?.focus();},[]);
+  useEffect(()=>{if(tab==='custom')cRef.current?.focus();},[tab]);
+
+  // Full available pool
+  const available=ITEM_TPLS.filter(([name])=>!takenNames.has(name.toLowerCase()));
+  const categories=[...new Set(available.map(([,cat])=>cat))].sort();
+
+  // Apply search + category together
+  const filtered=available.filter(([name,c])=>
+    (!cat||c===cat)&&name.toLowerCase().includes(q.toLowerCase())
+  );
+  const grouped=filtered.reduce((acc,[name,cat,weight])=>{
+    (acc[cat]=acc[cat]||[]).push({name,cat,weight});return acc;
+  },{});
+
+  const pick=(name,cat,weight)=>{
+    onAdd({itemName:name,itemCategory:cat,itemWeight:weight,locationName:locName,quantity:1});
+    setLastAdded(name);
+  };
+  const pickCustom=()=>{
+    if(!customName.trim())return;
+    onAdd({itemName:customName.trim(),itemCategory:newCat,itemWeight:200,locationName:locName,quantity:1});
+    setLastAdded(customName.trim());
+    setCustomName('');
+  };
+
+  return <Modal title={`Add to ${locName}`} onClose={onClose} w={440}>
+    {lastAdded&&<div style={{fontSize:12,color:'var(--gn)',marginBottom:10,padding:'6px 10px',
+      background:'rgba(63,214,138,.08)',borderRadius:6,border:'1px solid rgba(63,214,138,.2)'}}>
+      ✓ Added: {lastAdded}
+    </div>}
+
+    {/* Tabs */}
+    <div style={{display:'flex',gap:6,marginBottom:14}}>
+      {[['pick','Pick Item'],['custom','New Item']].map(([v,l])=>(
+        <button key={v} onClick={()=>setTab(v)} style={{padding:'5px 14px',borderRadius:20,
+          fontSize:12,fontWeight:600,border:'none',
+          background:tab===v?'var(--am)':'var(--sf2)',color:tab===v?'#1a0e00':'var(--tx2)'}}>
+          {l}
+        </button>
+      ))}
+    </div>
+
+    {tab==='pick'&&<>
+      <input ref={qRef} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search items…"
+        style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+          borderRadius:7,padding:'8px 12px',color:'var(--tx)',outline:'none',marginBottom:8}}/>
+      <CategoryFilter categories={categories} selected={cat} onSelect={setCat}/>
+      <div style={{maxHeight:300,overflowY:'auto',margin:'0 -24px',padding:'0 24px'}}>
+        {Object.entries(grouped).length===0
+          ?<div style={{textAlign:'center',color:'var(--tx3)',padding:'24px 0',fontSize:13}}>
+            {q||cat?'No matches — try clearing the filter':'All items already added here'}
+          </div>
+          :Object.entries(grouped).map(([c,items])=>(
+            <div key={c} style={{marginBottom:14}}>
+              {!cat&&<div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',
+                letterSpacing:1,fontWeight:600,marginBottom:4}}>{c}</div>}
+              {items.map(({name,cat:ic,weight})=>(
+                <button key={name} onClick={()=>pick(name,ic,weight)}
+                  style={{display:'flex',alignItems:'center',width:'100%',
+                    padding:'8px 10px',borderRadius:6,textAlign:'left',
+                    fontSize:13,color:'var(--tx)',marginBottom:2,
+                    background:'transparent',transition:'background .1s'}}
+                  onMouseEnter={e=>e.currentTarget.style.background='var(--sf2)'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <span style={{flex:1}}>{name}</span>
+                  <span style={{fontSize:11,color:'var(--tx3)',marginRight:10}}>{fmtW(weight)}</span>
+                  <span style={{color:'var(--tx3)',fontSize:15}}>+</span>
+                </button>
+              ))}
+            </div>
+          ))
+        }
+      </div>
+    </>}
+
+    {tab==='custom'&&<div>
+      <div style={{fontSize:12,color:'var(--tx2)',marginBottom:10}}>
+        Add a custom item to <b style={{color:'var(--tx)'}}>{locName}</b>. Weight defaults to 200g — edit it after adding.
+      </div>
+      <input ref={cRef} value={customName} onChange={e=>setCustomName(e.target.value)}
+        onKeyDown={e=>e.key==='Enter'&&pickCustom()}
+        placeholder="E.g. Silk Pyjamas…"
+        style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+          borderRadius:7,padding:'9px 12px',color:'var(--tx)',outline:'none',marginBottom:10}}/>
+      <div style={{fontSize:11,color:'var(--tx3)',marginBottom:6,textTransform:'uppercase',letterSpacing:.7}}>Category</div>
+      <CategoryPills value={newCat} onChange={setNewCat}/>
+      <button onClick={pickCustom} disabled={!customName.trim()}
+        style={{width:'100%',padding:'10px',borderRadius:7,background:'var(--am)',
+          color:'#1a0e00',fontWeight:700,fontSize:13,marginTop:12,opacity:customName.trim()?1:.45}}>
+        Add
+      </button>
+    </div>}
+
+    <button onClick={onClose}
+      style={{width:'100%',marginTop:14,padding:'9px',borderRadius:7,fontSize:13,
+        fontWeight:600,background:'var(--sf3)',border:'1px solid var(--bd)',color:'var(--tx)'}}>
+      {lastAdded?'Done':'Cancel'}
+    </button>
+  </Modal>;
+}
+
+/* ── TEMPLATE LOCATION PICKER ────────────────────────────────────── */
+function TemplateLocationPicker({takenLocNames,onClose,onPick}){
+  const [tab,setTab]=useState('pick');
+  const [customName,setCustomName]=useState('');
+  const cRef=useRef();
+  useEffect(()=>{if(tab==='custom')cRef.current?.focus();},[tab]);
+
+  const available=DEFAULT_LOCS
+    .map(l=>l.name)
+    .filter(name=>!takenLocNames.has(name.toLowerCase()));
+
+  return <Modal title="Add Location" onClose={onClose} w={380}>
+    <div style={{display:'flex',gap:6,marginBottom:16}}>
+      {[['pick','Common Locations'],['custom','Custom']].map(([v,l])=>(
+        <button key={v} onClick={()=>setTab(v)} style={{padding:'5px 14px',borderRadius:20,
+          fontSize:12,fontWeight:600,border:'none',
+          background:tab===v?'var(--am)':'var(--sf2)',color:tab===v?'#1a0e00':'var(--tx2)'}}>
+          {l}
+        </button>
+      ))}
+    </div>
+
+    {tab==='pick'&&<div style={{display:'flex',flexDirection:'column',gap:6}}>
+      {available.length===0
+        ?<div style={{textAlign:'center',color:'var(--tx3)',padding:'16px 0',fontSize:13}}>
+            All common locations already added — use Custom to add more.
+          </div>
+        :available.map(name=>(
+          <button key={name} onClick={()=>onPick(name)}
+            style={{display:'flex',alignItems:'center',padding:'11px 14px',borderRadius:8,
+              background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:14,fontWeight:600,
+              textAlign:'left',color:'var(--tx)',transition:'border-color .12s'}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor='var(--am)'}
+            onMouseLeave={e=>e.currentTarget.style.borderColor='var(--bd)'}>
+            <span style={{flex:1}}>{name}</span>
+            <span style={{color:'var(--tx3)',fontSize:15}}>+</span>
+          </button>
+        ))
+      }
+    </div>}
+
+    {tab==='custom'&&<div>
+      <div style={{fontSize:12,color:'var(--tx2)',marginBottom:8}}>
+        Type any location name, e.g. Hotel Safe, Day Bag, Bike Bag…
+      </div>
+      <input ref={cRef} value={customName} onChange={e=>setCustomName(e.target.value)}
+        onKeyDown={e=>e.key==='Enter'&&customName.trim()&&onPick(customName.trim())}
+        placeholder="Location name…"
+        style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
+          borderRadius:7,padding:'9px 12px',color:'var(--tx)',outline:'none',marginBottom:12}}/>
+      <button onClick={()=>customName.trim()&&onPick(customName.trim())}
+        disabled={!customName.trim()}
+        style={{width:'100%',padding:'10px',borderRadius:7,background:'var(--am)',
+          color:'#1a0e00',fontWeight:700,fontSize:13,opacity:customName.trim()?1:.45}}>
+        Add Location
+      </button>
+    </div>}
+  </Modal>;
+}
+
+/* ── TEMPLATE CARD ───────────────────────────────────────────────── */
+function TemplateCard({tpl,trips,sort='personal',dragHandle,onRename,onRemoveItem,onUpdateQty,onUpdateItemWeight,onAddItem,onReorderItems,onRenameLocation,onDelete,onDuplicate,onApplyToTrip,onCreateAndApply}){
+  const [expanded,setExpanded]=useState(false);
+  const [renaming,setRenaming]=useState(false);
+  const [val,setVal]=useState('');
+  const [pickingTrip,setPickingTrip]=useState(false);
+  const [newTripName,setNewTripName]=useState('');
+  const [creatingNew,setCreatingNew]=useState(false);
+  const [dragFromIdx,setDragFromIdx]=useState(null);
+  const [dragOverIdx,setDragOverIdx]=useState(null);
+  const dragFromRef=useRef(null);
+  const dragOverRef=useRef(null);
+  const newTripRef=useRef();
+  const iRef=useRef();
+  const{ask:confirm,el:confirmEl}=useConfirm();
+
+  const startTplDrag=idx=>{setDragFromIdx(idx);dragFromRef.current=idx;};
+  const enterTplDrag=idx=>{setDragOverIdx(idx);dragOverRef.current=idx;};
+  const endTplDrag=()=>{
+    const from=dragFromRef.current;
+    const to=dragOverRef.current;
+    if(from!==null&&to!==null&&from!==to) onReorderItems(from,to);
+    setDragFromIdx(null);setDragOverIdx(null);
+    dragFromRef.current=null;dragOverRef.current=null;
+  };
+
+  const tplHandleTouchStart=(e,idx,itemName)=>{
+    e.stopPropagation();
+    startTplDrag(idx);
+    const ghost=document.createElement('div');
+    ghost.textContent=itemName;
+    Object.assign(ghost.style,{
+      position:'fixed',left:'-9999px',top:'-9999px',zIndex:9999,pointerEvents:'none',
+      background:'var(--am)',color:'#1a0e00',padding:'8px 14px',borderRadius:8,
+      fontSize:13,fontWeight:700,boxShadow:'0 8px 24px rgba(0,0,0,.5)',
+      opacity:'0.92',whiteSpace:'nowrap',transform:'translate(-50%,-180%)',
+    });
+    document.body.appendChild(ghost);
+    let scrollEl=null;let scrollTimer=null;
+    const move=ev=>{
+      ev.preventDefault();
+      const t=ev.touches[0];
+      ghost.style.left=t.clientX+'px';ghost.style.top=t.clientY+'px';
+      const el=document.elementFromPoint(t.clientX,t.clientY);
+      const row=el?.closest('[data-tplidx]');
+      if(row&&parseInt(row.dataset.tplidx)!==idx) enterTplDrag(parseInt(row.dataset.tplidx));
+      if(!scrollEl)scrollEl=findScrollable(el);
+      if(scrollEl){
+        const rect=scrollEl.getBoundingClientRect();const ZONE=80,SPEED=6;
+        clearTimeout(scrollTimer);
+        if(t.clientY-rect.top<ZONE){const step=()=>{scrollEl.scrollBy(0,-SPEED);scrollTimer=setTimeout(step,16);};step();}
+        else if(rect.bottom-t.clientY<ZONE){const step=()=>{scrollEl.scrollBy(0,SPEED);scrollTimer=setTimeout(step,16);};step();}
+      }
+    };
+    const end=()=>{ghost.remove();clearTimeout(scrollTimer);endTplDrag();
+      document.removeEventListener('touchmove',move);document.removeEventListener('touchend',end);};
+    document.addEventListener('touchmove',move,{passive:false});
+    document.addEventListener('touchend',end);
+  };
+
+  const startRename=e=>{e.stopPropagation();setVal(tpl.name);setRenaming(true);};
+  const saveRename=()=>{if(val.trim())onRename(val.trim());setRenaming(false);};
+  useEffect(()=>{if(renaming)iRef.current?.focus();},[renaming]);
+  useEffect(()=>{if(creatingNew)newTripRef.current?.focus();},[creatingNew]);
+
+  const byLoc=tpl.assignments.reduce((acc,a,i)=>{
+    const k=a.locationName;
+    (acc[k]=acc[k]||[]).push({...a,_idx:i});
+    return acc;
+  },{});
+
+  const handleApply=e=>{e.stopPropagation();setPickingTrip(true);setCreatingNew(false);setNewTripName('');};
+
+  // Adding items: which location is currently open for adding
+  const [adding,setAdding]=useState(null); // locName | null
+  const [pickingLoc,setPickingLoc]=useState(false);
+  const [renamingLoc,setRenamingLoc]=useState(null); // locName being renamed
+  const [renameLocVal,setRenameLocVal]=useState('');
+  const [weightEditIdx,setWeightEditIdx]=useState(null);
+  const [weightEditVal,setWeightEditVal]=useState('');
+
+  return <>
+    {confirmEl}
+    <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,overflow:'hidden'}}>
+
+      {/* Header row */}
+      <div style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:8,
+        cursor:renaming?'default':'pointer'}}
+        onClick={()=>!renaming&&setExpanded(x=>!x)}>
+        {dragHandle}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+            <div style={{fontWeight:700,fontSize:15,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              {tpl.name}
+            </div>
+            {!renaming&&<button onClick={e=>{e.stopPropagation();startRename(e);}}
+              style={{fontSize:12,color:'var(--tx3)',padding:'2px 5px',borderRadius:4,flexShrink:0}}
+              onMouseEnter={e=>e.currentTarget.style.color='var(--am)'}
+              onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>✎</button>}
+          </div>
+          <div style={{fontSize:11,color:'var(--tx3)'}}>
+            {tpl.assignments.length} item{tpl.assignments.length!==1?'s':''} across {Object.keys(byLoc).length} location{Object.keys(byLoc).length!==1?'s':''}
+          </div>
+        </div>
+        {!renaming&&<>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4,flexShrink:0}}>
+            <button onClick={e=>{e.stopPropagation();handleApply(e);}}
+              style={{padding:'6px 14px',borderRadius:7,fontSize:12,fontWeight:700,
+                background:'var(--am)',color:'#1a0e00',border:'none'}}>
+              Apply
+            </button>
+          </div>
+          <button onClick={e=>{e.stopPropagation();onDuplicate();}}
+            title="Duplicate" style={{color:'var(--tx3)',fontSize:13,padding:'4px 8px',borderRadius:5,flexShrink:0}}
+            onMouseEnter={e=>e.currentTarget.style.color='var(--am)'}
+            onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>⧉</button>
+          <button onClick={e=>{e.stopPropagation();confirm(`Delete template "${tpl.name}"?`,onDelete);}}
+            style={{color:'var(--tx3)',fontSize:15,padding:'4px 8px',borderRadius:5,flexShrink:0}}
+            onMouseEnter={e=>e.currentTarget.style.color='var(--rd)'}
+            onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>✕</button>
+          <span style={{color:'var(--tx3)',fontSize:11,flexShrink:0}}>{expanded?'▲':'▼'}</span>
+        </>}
+      </div>
+
+      {/* Inline rename — full width, no overlap on mobile */}
+      {renaming&&<div style={{padding:'0 16px 12px',display:'flex',flexDirection:'column',gap:8}}
+        onClick={e=>e.stopPropagation()}>
+        <input ref={iRef} value={val} onChange={e=>setVal(e.target.value)}
+          onKeyDown={e=>{if(e.key==='Enter')saveRename();if(e.key==='Escape')setRenaming(false);}}
+          autoFocus
+          style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--am)',borderRadius:7,
+            padding:'8px 12px',color:'var(--tx)',outline:'none',fontSize:14,fontWeight:700}}/>
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={saveRename} style={{flex:1,padding:'8px',borderRadius:7,
+            background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:13}}>Save</button>
+          <button onClick={()=>setRenaming(false)} style={{flex:1,padding:'8px',borderRadius:7,
+            background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:13,color:'var(--tx2)'}}>Cancel</button>
+        </div>
+      </div>}
+
+      {/* Expanded / edit view */}
+      {expanded&&<div style={{borderTop:'1px solid var(--bd)',padding:'12px 16px',
+        display:'flex',flexDirection:'column',gap:14}}
+        onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget)){setDragOverIdx(null);dragOverRef.current=null;}}}>
+
+        {Object.entries(byLoc).map(([locName,items])=>{
+          const sortedItems=sortBy(items,sort,a=>a.itemName,a=>a.itemWeight??200);
+          return (<div key={locName}>
+            {renamingLoc===locName
+              ?<div style={{display:'flex',gap:6,marginBottom:6}} onClick={e=>e.stopPropagation()}>
+                  <input value={renameLocVal} onChange={e=>setRenameLocVal(e.target.value)} autoFocus
+                    onKeyDown={e=>{
+                      if(e.key==='Enter'&&renameLocVal.trim()){
+                        onRenameLocation(locName,renameLocVal.trim());setRenamingLoc(null);
+                      }
+                      if(e.key==='Escape')setRenamingLoc(null);
+                    }}
+                    style={{flex:1,background:'var(--sf)',border:'1px solid var(--am)',borderRadius:5,
+                      padding:'3px 8px',color:'var(--tx)',fontSize:10,fontWeight:700,
+                      textTransform:'uppercase',letterSpacing:1,outline:'none'}}/>
+                  <button onClick={()=>{if(renameLocVal.trim()){onRenameLocation(locName,renameLocVal.trim());setRenamingLoc(null);}}}
+                    style={{padding:'2px 8px',borderRadius:5,background:'var(--am)',color:'#1a0e00',fontSize:11,fontWeight:700}}>✓</button>
+                  <button onClick={()=>setRenamingLoc(null)}
+                    style={{padding:'2px 6px',borderRadius:5,background:'var(--sf2)',color:'var(--tx3)',fontSize:11}}>✕</button>
+                </div>
+              :<div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+                  <div style={{fontSize:10,color:'var(--tx3)',textTransform:'uppercase',
+                    letterSpacing:1,fontWeight:600}}>{locName}</div>
+                  <button onClick={e=>{e.stopPropagation();setRenamingLoc(locName);setRenameLocVal(locName);}}
+                    style={{fontSize:10,color:'var(--tx3)',padding:'1px 4px',borderRadius:3,background:'none'}}
+                    onMouseEnter={e=>e.currentTarget.style.color='var(--am)'}
+                    onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>✎</button>
+                </div>
+            }
+            <div style={{display:'flex',flexDirection:'column',gap:4}}>
+              {sortedItems.map((a,i)=>(
+                <React.Fragment key={a._idx}>
+                  {dragOverIdx===a._idx&&dragFromIdx!==a._idx&&
+                    <div style={{height:3,borderRadius:2,background:'var(--am)',margin:'2px 4px'}}/>}
+                  <div
+                    data-tplidx={a._idx}
+                    draggable={sort==='personal'}
+                    onDragStart={sort==='personal'?e=>{e.dataTransfer.effectAllowed='move';startTplDrag(a._idx);}:undefined}
+                    onDragEnter={e=>{e.preventDefault();enterTplDrag(a._idx);}}
+                    onDragOver={e=>e.preventDefault()}
+                    onDragEnd={endTplDrag}
+                    style={{display:'flex',alignItems:'center',gap:8,
+                      padding:'6px 10px',background:'var(--sf2)',borderRadius:7,marginBottom:4}}>
+                    {sort==='personal'&&<span
+                      onTouchStart={IS_TOUCH_PRIMARY?e=>tplHandleTouchStart(e,a._idx,a.itemName):undefined}
+                      style={{color:'var(--tx3)',fontSize:16,flexShrink:0,cursor:'grab',
+                        userSelect:'none',touchAction:'none',padding:'2px 4px'}}>⠿</span>}
+                    <span style={{flex:1,fontSize:13}}>{a.itemName}</span>
+                    {weightEditIdx===a._idx
+                      ?<div style={{display:'flex',gap:4,alignItems:'center',flexShrink:0}}
+                          onClick={e=>e.stopPropagation()}>
+                          <input value={weightEditVal}
+                            onChange={e=>setWeightEditVal(e.target.value.replace(/\D/g,''))}
+                            onKeyDown={e=>{
+                              if(e.key==='Enter'){
+                                const v=parseInt(weightEditVal);
+                                if(!isNaN(v)&&v>=0)onUpdateItemWeight(a._idx,v);
+                                setWeightEditIdx(null);
+                              }
+                              if(e.key==='Escape')setWeightEditIdx(null);
+                            }}
+                            onBlur={()=>{const v=parseInt(weightEditVal);if(!isNaN(v)&&v>=0)onUpdateItemWeight(a._idx,v);setWeightEditIdx(null);}}
+                            autoFocus
+                            style={{width:52,background:'var(--sf)',border:'1px solid var(--am)',borderRadius:4,
+                              padding:'2px 5px',color:'var(--tx)',fontSize:11,fontWeight:700,
+                              textAlign:'center',outline:'none'}}/>
+                          <span style={{fontSize:10,color:'var(--tx3)'}}>g</span>
+                        </div>
+                      :<button onClick={e=>{e.stopPropagation();setWeightEditIdx(a._idx);setWeightEditVal(String(a.itemWeight??200));}}
+                          style={{fontSize:10,color:'var(--tx3)',padding:'2px 5px',borderRadius:4,
+                            background:'var(--sf3)',flexShrink:0,whiteSpace:'nowrap'}}
+                          title="Edit weight">
+                          {fmtW(a.itemWeight??200)}
+                        </button>
+                    }
+                    <div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+                      <button onClick={()=>a.quantity>1?onUpdateQty(a._idx,a.quantity-1):onRemoveItem(a._idx)}
+                        style={{width:22,height:22,borderRadius:4,background:'var(--sf3)',fontSize:15,
+                          display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+                      <span style={{width:20,textAlign:'center',fontSize:13,fontWeight:600}}>{a.quantity}</span>
+                      <button onClick={()=>onUpdateQty(a._idx,a.quantity+1)}
+                        style={{width:22,height:22,borderRadius:4,background:'var(--sf3)',fontSize:15,
+                          display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+                    </div>
+                    <button onClick={()=>onRemoveItem(a._idx)}
+                      style={{color:'var(--tx3)',fontSize:13,padding:'2px 6px',borderRadius:4,flexShrink:0}}
+                      onMouseEnter={e=>e.currentTarget.style.color='var(--rd)'}
+                      onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>✕</button>
+                  </div>
+                </React.Fragment>
+              ))}
+
+              {/* Add item button for this location */}
+              <button onClick={e=>{e.stopPropagation();setAdding(locName);}}
+                style={{marginTop:4,width:'100%',padding:'5px',borderRadius:6,fontSize:12,
+                  border:'1px dashed var(--bd)',color:'var(--tx3)',display:'flex',
+                  alignItems:'center',justifyContent:'center',gap:4}}>
+                <span style={{fontSize:14}}>+</span> Add item to {locName}
+              </button>
+            </div>
+          </div>
+          );
+        })}
+
+        {/* Add a new location to template */}
+        <button onClick={e=>{e.stopPropagation();setPickingLoc(true);}}
+          style={{padding:'7px',borderRadius:7,fontSize:12,border:'1px dashed var(--bd)',
+            color:'var(--tx3)',display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>
+          <span style={{fontSize:14}}>+</span> Add new location
+        </button>
+
+        {tpl.assignments.length===0&&<div style={{fontSize:13,color:'var(--tx3)',
+          textAlign:'center',padding:'8px 0'}}>No items — add some or delete this template.</div>}
+      </div>}
+    </div>
+
+    {/* Template location picker modal */}
+    {pickingLoc&&<TemplateLocationPicker
+      takenLocNames={new Set(tpl.assignments.map(a=>a.locationName.toLowerCase()))}
+      onClose={()=>setPickingLoc(false)}
+      onPick={name=>{setPickingLoc(false);setAdding(name);}}
+    />}
+
+    {/* Template item picker modal */}
+    {adding&&<TemplateItemPicker
+      locName={adding}
+      takenNames={new Set(tpl.assignments.filter(a=>a.locationName===adding).map(a=>a.itemName.toLowerCase()))}
+      onClose={()=>setAdding(null)}
+      onAdd={a=>onAddItem(a)}
+    />}
+
+    {/* Trip picker when applying from home */}
+    {pickingTrip&&<>
+      <Veil onClick={()=>setPickingTrip(false)}/>
+      <div style={{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
+        width:360,maxWidth:'94vw',background:'var(--sf)',border:'1px solid var(--bd)',
+        borderRadius:12,padding:24,zIndex:201,boxShadow:'0 24px 64px rgba(0,0,0,.65)',
+        animation:'fdModal .2s ease'}}>
+        <div className="bb" style={{fontSize:20,color:'var(--am)',marginBottom:16}}>Apply to which trip?</div>
+
+        {/* Create new trip option */}
+        <div style={{marginBottom:trips.length>0?16:0}}>
+          {creatingNew
+            ?<div style={{display:'flex',gap:8}}>
+                <input ref={newTripRef} value={newTripName} onChange={e=>setNewTripName(e.target.value)}
+                  onKeyDown={e=>{
+                    if(e.key==='Enter'&&newTripName.trim()){onCreateAndApply(newTripName.trim());setPickingTrip(false);}
+                    if(e.key==='Escape')setCreatingNew(false);
+                  }}
+                  placeholder="Trip name…"
+                  style={{flex:1,background:'var(--sf2)',border:'1px solid var(--am)',borderRadius:7,
+                    padding:'9px 12px',color:'var(--tx)',outline:'none',fontSize:14}}/>
+                <button
+                  onClick={()=>{if(newTripName.trim()){onCreateAndApply(newTripName.trim());setPickingTrip(false);}}}
+                  disabled={!newTripName.trim()}
+                  style={{padding:'9px 14px',borderRadius:7,background:'var(--am)',color:'#1a0e00',
+                    fontWeight:700,fontSize:13,opacity:newTripName.trim()?1:.45}}>
+                  Create
+                </button>
+                <button onClick={()=>setCreatingNew(false)}
+                  style={{color:'var(--tx3)',fontSize:18,padding:'4px 8px',borderRadius:6}}>✕</button>
+              </div>
+            :<button onClick={()=>setCreatingNew(true)}
+                style={{width:'100%',padding:'10px 14px',borderRadius:8,textAlign:'left',
+                  background:'var(--am-bg)',border:'1px solid var(--am)',fontSize:14,
+                  fontWeight:600,color:'var(--am)'}}>
+                + Create New Trip
+              </button>
+          }
+        </div>
+
+        {/* Existing trips */}
+        {trips.length>0&&<>
+          <div style={{fontSize:11,color:'var(--tx3)',textTransform:'uppercase',
+            letterSpacing:.8,marginBottom:8}}>or apply to existing</div>
+          <div style={{display:'flex',flexDirection:'column',gap:6,maxHeight:240,overflowY:'auto'}}>
+            {trips.slice().sort((a,b)=>b.createdAt-a.createdAt).map(t=>(
+              <button key={t.id} onClick={()=>{onApplyToTrip(t.id);setPickingTrip(false);}}
+                style={{padding:'10px 14px',borderRadius:8,background:'var(--sf2)',
+                  border:'1px solid var(--bd)',fontSize:14,fontWeight:600,textAlign:'left',
+                  color:'var(--tx)',transition:'border-color .12s'}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor='var(--am)'}
+                onMouseLeave={e=>e.currentTarget.style.borderColor='var(--bd)'}>
+                {t.name}
+              </button>
+            ))}
+          </div>
+        </>}
+
+        <button onClick={()=>setPickingTrip(false)}
+          style={{marginTop:14,width:'100%',padding:'8px',borderRadius:7,
+            background:'transparent',border:'1px solid var(--bd)',fontSize:13,color:'var(--tx3)'}}>
+          Cancel
+        </button>
+      </div>
+    </>}
+  </>;
+}
+
+/* ── TRIP CARD (sub-component so useRef is at component level) ───── */
+function TripCard({t,isOver,isRenaming,renamingId,renameVal,setRenamingId,setRenameVal,
+  saveRename,onSelect,onDuplicate,onDelete,confirm,fmt,tripDrag}){
+  const fromHandle=useRef(false);
+  const tot=t.assignments.reduce((s,a)=>s+a.quantity,0);
+  const pk=t.assignments.reduce((s,a)=>s+getPackedQty(a),0);
+  const pct=tot>0?(pk/tot)*100:0;
+  return <React.Fragment>
+    {isOver&&<div style={{height:3,borderRadius:2,background:'var(--am)',margin:'4px 0'}}/>}
+    <div
+      data-dndid={t.id}
+      draggable={!isRenaming}
+      onDragStart={!isRenaming?e=>{if(!fromHandle.current){e.preventDefault();return;}e.dataTransfer.effectAllowed='move';tripDrag.start(t.id);}:undefined}
+      onDragEnd={()=>{fromHandle.current=false;tripDrag.end();}}
+      onDragEnter={e=>{e.preventDefault();tripDrag.enter(t.id);}}
+      onDragOver={e=>e.preventDefault()}
+      style={{background:'var(--sf)',border:`1px solid ${isRenaming?'var(--am)':'var(--bd)'}`,
+        borderRadius:10,padding:'15px 18px',display:'flex',alignItems:'center',gap:10,
+        cursor:isRenaming?'default':'pointer',transition:'border-color .15s',marginBottom:10}}
+      onClick={()=>!isRenaming&&onSelect(t.id)}
+      onMouseEnter={e=>{if(!isRenaming)e.currentTarget.style.borderColor='var(--am)';}}
+      onMouseLeave={e=>{if(!isRenaming)e.currentTarget.style.borderColor='var(--bd)';}}>
+      {!isRenaming&&<span
+        onMouseDown={()=>{fromHandle.current=true;}}
+        onMouseUp={()=>{fromHandle.current=false;}}
+        onTouchStart={IS_TOUCH_PRIMARY?e=>tripDrag.touchStart(e,t.id,t.name):undefined}
+        style={{color:'var(--tx3)',fontSize:16,flexShrink:0,cursor:'grab',
+          userSelect:'none',touchAction:'none',padding:'2px 4px'}}
+        onClick={e=>e.stopPropagation()}>⠿</span>}
+      <div style={{flex:1,minWidth:0}}>
+        {isRenaming
+          ?<div style={{display:'flex',gap:8,marginBottom:8}} onClick={e=>e.stopPropagation()}>
+              <input value={renameVal} onChange={e=>setRenameVal(e.target.value)} autoFocus
+                onKeyDown={e=>{if(e.key==='Enter')saveRename(t.id);if(e.key==='Escape')setRenamingId(null);}}
+                style={{flex:1,background:'var(--sf2)',border:'1px solid var(--am)',borderRadius:6,
+                  padding:'6px 10px',color:'var(--tx)',outline:'none',fontSize:14,fontWeight:600}}/>
+              <button onClick={()=>saveRename(t.id)} style={{padding:'6px 12px',borderRadius:6,
+                background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:13}}>✓</button>
+              <button onClick={()=>setRenamingId(null)} style={{padding:'6px 10px',borderRadius:6,
+                background:'var(--sf2)',border:'1px solid var(--bd)',fontSize:13,color:'var(--tx2)'}}>✕</button>
+            </div>
+          :<div style={{fontWeight:700,fontSize:15,marginBottom:3,
+              overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name}</div>
+        }
+        <div style={{fontSize:11,color:'var(--tx3)',marginBottom:9}}>
+          {fmt(t.createdAt)} · {t.assignments.length} item type{t.assignments.length!==1?'s':''}
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <div style={{flex:1,height:4,background:'var(--sf3)',borderRadius:2,overflow:'hidden'}}>
+            <div style={{height:'100%',borderRadius:2,width:`${pct}%`,
+              background:pct===100?'var(--gn)':'var(--am)',transition:'width .3s'}}/>
+          </div>
+          <span style={{fontSize:11,color:'var(--tx3)',flexShrink:0}}>{pk}/{tot} packed</span>
+        </div>
+      </div>
+      {!isRenaming&&<>
+        <button onClick={e=>{e.stopPropagation();setRenamingId(t.id);setRenameVal(t.name);}}
+          title="Rename" style={{color:'var(--tx3)',fontSize:14,padding:'4px 8px',borderRadius:5,flexShrink:0}}
+          onMouseEnter={e=>e.currentTarget.style.color='var(--am)'}
+          onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>✎</button>
+        <button onClick={e=>{e.stopPropagation();onDuplicate(t.id);}}
+          title="Duplicate" style={{color:'var(--tx3)',fontSize:13,padding:'4px 8px',borderRadius:5,flexShrink:0}}
+          onMouseEnter={e=>e.currentTarget.style.color='var(--am)'}
+          onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>⧉</button>
+        <button onClick={e=>{e.stopPropagation();confirm(`Delete "${t.name}"? This cannot be undone.`,()=>onDelete(t.id));}}
+          style={{color:'var(--tx3)',fontSize:16,padding:'4px 8px',borderRadius:5,flexShrink:0}}
+          onMouseEnter={e=>e.currentTarget.style.color='var(--rd)'}
+          onMouseLeave={e=>e.currentTarget.style.color='var(--tx3)'}>✕</button>
+      </>}
+    </div>
+  </React.Fragment>;
+}
+
+/* ── TEMPLATE DRAG WRAPPER (sub-component so useRef is at component level) */
+function TemplateDragWrapper({tpl,trips,tplSort,tplDrag,isOver,
+  onRenameTemplate,onRemoveTemplateItem,onUpdateTemplateItemQty,onUpdateTemplateItemWeight,
+  onRenameTemplateLocation,onAddTemplateItem,onReorderTemplateItems,onDeleteTemplate,
+  onApplyTemplateToTrip,onCreateTripAndApply,onDuplicateTemplate}){
+  const fromHandle=useRef(false);
+  return <React.Fragment>
+    {isOver&&<div style={{height:3,borderRadius:2,background:'var(--am)',margin:'4px 0'}}/>}
+    <div data-dndid={tpl.id}
+      draggable
+      onDragStart={e=>{if(!fromHandle.current){e.preventDefault();return;}e.dataTransfer.effectAllowed='move';tplDrag.start(tpl.id);}}
+      onDragEnd={()=>{fromHandle.current=false;tplDrag.end();}}
+      onDragEnter={e=>{e.preventDefault();tplDrag.enter(tpl.id);}}
+      onDragOver={e=>e.preventDefault()}
+      style={{marginBottom:10}}>
+      <TemplateCard tpl={tpl} trips={trips} sort={tplSort}
+        dragHandle={<span
+          onMouseDown={()=>{fromHandle.current=true;}}
+          onMouseUp={()=>{fromHandle.current=false;}}
+          onTouchStart={IS_TOUCH_PRIMARY?e=>tplDrag.touchStart(e,tpl.id,tpl.name):undefined}
+          style={{color:'var(--tx3)',fontSize:16,flexShrink:0,cursor:'grab',
+            userSelect:'none',touchAction:'none',padding:'2px 6px'}}
+          onClick={e=>e.stopPropagation()}>⠿</span>}
+        onRename={name=>onRenameTemplate(tpl.id,name)}
+        onRemoveItem={idx=>onRemoveTemplateItem(tpl.id,idx)}
+        onUpdateQty={(idx,qty)=>onUpdateTemplateItemQty(tpl.id,idx,qty)}
+        onUpdateItemWeight={(idx,w)=>onUpdateTemplateItemWeight(tpl.id,idx,w)}
+        onRenameLocation={(old,nw)=>onRenameTemplateLocation(tpl.id,old,nw)}
+        onAddItem={a=>onAddTemplateItem(tpl.id,a)}
+        onReorderItems={(from,to)=>onReorderTemplateItems(tpl.id,from,to)}
+        onDelete={()=>onDeleteTemplate(tpl.id)}
+        onDuplicate={()=>onDuplicateTemplate(tpl.id)}
+        onApplyToTrip={tripId=>onApplyTemplateToTrip(tpl.id,tripId)}
+        onCreateAndApply={name=>onCreateTripAndApply(tpl.id,name)}/>
+    </div>
+  </React.Fragment>;
+}
+
+/* ── DRAG LIST HOOK ──────────────────────────────────────────────── */
+function useDragList(onReorder){
+  const [dragId,setDragId]=useState(null);
+  const [overId,setOverId]=useState(null);
+  const dragRef=useRef(null);
+  const overRef=useRef(null);
+  const start=id=>{setDragId(id);dragRef.current=id;};
+  const enter=id=>{setOverId(id);overRef.current=id;};
+  const end=()=>{
+    const from=dragRef.current,to=overRef.current;
+    if(from&&to&&from!==to)onReorder(from,to);
+    setDragId(null);setOverId(null);dragRef.current=null;overRef.current=null;
+  };
+  const leave=e=>{if(!e.currentTarget?.contains(e.relatedTarget)){setOverId(null);overRef.current=null;}};
+  const touchStart=(e,id,label)=>{
+    e.stopPropagation();start(id);
+    const ghost=document.createElement('div');
+    ghost.textContent=label;
+    Object.assign(ghost.style,{position:'fixed',left:'-9999px',top:'-9999px',zIndex:9999,
+      pointerEvents:'none',background:'var(--am)',color:'#1a0e00',padding:'8px 14px',
+      borderRadius:8,fontSize:13,fontWeight:700,boxShadow:'0 8px 24px rgba(0,0,0,.5)',
+      opacity:'0.92',whiteSpace:'nowrap',transform:'translate(-50%,-180%)'});
+    document.body.appendChild(ghost);
+    let scrollEl=null,scrollTimer=null;
+    const move=ev=>{
+      ev.preventDefault();
+      const t=ev.touches[0];
+      ghost.style.left=t.clientX+'px';ghost.style.top=t.clientY+'px';
+      const el=document.elementFromPoint(t.clientX,t.clientY);
+      const row=el?.closest('[data-dndid]');
+      if(row&&row.dataset.dndid!==id)enter(row.dataset.dndid);
+      if(!scrollEl)scrollEl=findScrollable(el);
+      if(scrollEl){
+        const r=scrollEl.getBoundingClientRect();const Z=80,S=6;
+        clearTimeout(scrollTimer);
+        if(t.clientY-r.top<Z){const f=()=>{scrollEl.scrollBy(0,-S);scrollTimer=setTimeout(f,16);};f();}
+        else if(r.bottom-t.clientY<Z){const f=()=>{scrollEl.scrollBy(0,S);scrollTimer=setTimeout(f,16);};f();}
+      }
+    };
+    const up=()=>{ghost.remove();clearTimeout(scrollTimer);end();
+      document.removeEventListener('touchmove',move);document.removeEventListener('touchend',up);};
+    document.addEventListener('touchmove',move,{passive:false});
+    document.addEventListener('touchend',up);
+  };
+  return{dragId,overId,start,enter,end,leave,touchStart};
+}
+
+function HomeScreen({trips,templates,onCreate,onSelect,onDelete,onRename,onDuplicate,onDeleteTemplate,
+  onRenameTemplate,onRemoveTemplateItem,onUpdateTemplateItemQty,onUpdateTemplateItemWeight,
+  onRenameTemplateLocation,onAddTemplateItem,onReorderTemplateItems,
+  onReorderTrips,onReorderTemplates,onDuplicateTemplate,
+  onApplyTemplateToTrip,onCreateTripAndApply,onCreateTemplate}){
+  const [tab,setTab]=useState('trips');
+  const [name,setName]=useState('');
+  const [tplName,setTplName]=useState('');
+  const [tplSort,setTplSort]=useState('personal');
+  const [renamingId,setRenamingId]=useState(null);
+  const [renameVal,setRenameVal]=useState('');
+  const{ask:confirm,el:confirmEl}=useConfirm();
+  const fmt=ts=>new Date(ts).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});
+  const saveRename=id=>{if(renameVal.trim())onRename(id,renameVal.trim());setRenamingId(null);};
+  const tripDrag=useDragList(onReorderTrips);
+  const tplDrag=useDragList(onReorderTemplates);
+
+  return <div style={{flex:1,overflowY:'auto',padding:'32px 20px',paddingBottom:'calc(32px + env(safe-area-inset-bottom))'}}>
+    {confirmEl}
+    <div style={{maxWidth:680,margin:'0 auto'}}>
+
+      <div className="bb" style={{fontSize:64,color:'var(--am)',letterSpacing:6,lineHeight:1,marginBottom:6}}>
+        PACKR
+      </div>
+      <div style={{fontSize:14,color:'var(--tx2)',marginBottom:28,letterSpacing:.3}}>
+        Smart packing for smarter travellers
+      </div>
+
+      {/* New trip box */}
+      <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,
+        padding:'18px 20px',marginBottom:28}}>
+        <div className="bb" style={{fontSize:16,color:'var(--am)',marginBottom:12}}>New Trip</div>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          <input value={name} onChange={e=>setName(e.target.value)}
+            onKeyDown={e=>{if(e.key==='Enter'&&name.trim()){onCreate(name.trim());setName('');}}}
+            placeholder="E.g. Tokyo 2025, Bali Conference…"
+            style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:7,
+              padding:'10px 14px',color:'var(--tx)',outline:'none',fontSize:14}}/>
+          <button onClick={()=>{if(name.trim()){onCreate(name.trim());setName('');}}}
+            disabled={!name.trim()} style={{width:'100%',padding:'10px',borderRadius:7,
+              background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:14,opacity:name.trim()?1:.45}}>
+            Create Trip
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:'flex',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)',
+        padding:3,marginBottom:20}}>
+        {[['trips',`Trips (${trips.length})`],['templates',`Templates (${(templates||[]).length})`]].map(([v,l])=>(
+          <button key={v} onClick={()=>setTab(v)} style={{flex:1,padding:'8px',borderRadius:6,
+            fontSize:13,fontWeight:600,transition:'all .15s',
+            background:tab===v?'var(--sf3)':'transparent',
+            color:tab===v?'var(--tx)':'var(--tx2)'}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* Trips tab */}
+      {tab==='trips'&&<div style={{display:'flex',flexDirection:'column',gap:0}}
+        onDragLeave={tripDrag.leave}>
+        {trips.length===0&&<div style={{textAlign:'center',color:'var(--tx3)',padding:'32px 0',fontSize:14}}>
+          No trips yet — create one above.
+        </div>}
+        {trips.map(t=><TripCard key={t.id} t={t}
+          isOver={tripDrag.overId===t.id&&tripDrag.dragId!==t.id}
+          isRenaming={renamingId===t.id}
+          renamingId={renamingId} renameVal={renameVal}
+          setRenamingId={setRenamingId} setRenameVal={setRenameVal}
+          saveRename={saveRename} onSelect={onSelect}
+          onDuplicate={onDuplicate} onDelete={onDelete}
+          confirm={confirm} fmt={fmt} tripDrag={tripDrag}/>)}
+        {/* Bottom drop zone */}
+        <div data-dndid="__list_bottom__"
+          onDragEnter={e=>{e.preventDefault();tripDrag.enter('__list_bottom__');}}
+          onDragOver={e=>e.preventDefault()}
+          style={{minHeight:32}}>
+          {tripDrag.overId==='__list_bottom__'&&tripDrag.dragId&&
+            <div style={{height:3,borderRadius:2,background:'var(--am)',margin:'4px 0'}}/>}
+        </div>
+      </div>}
+
+      {/* Templates tab */}
+      {tab==='templates'&&<div style={{display:'flex',flexDirection:'column',gap:10}}>
+
+        {/* New template form */}
+        <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,
+          padding:'18px 20px'}}>
+          <div className="bb" style={{fontSize:16,color:'var(--am)',marginBottom:12}}>New Template</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            <input value={tplName} onChange={e=>setTplName(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter'&&tplName.trim()){onCreateTemplate(tplName.trim());setTplName('');}}}
+              placeholder="E.g. Business Trip, Beach Week…"
+              style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:7,
+                padding:'10px 14px',color:'var(--tx)',outline:'none',fontSize:14}}/>
+            <button onClick={()=>{if(tplName.trim()){onCreateTemplate(tplName.trim());setTplName('');}}}
+              disabled={!tplName.trim()} style={{width:'100%',padding:'10px',borderRadius:7,
+                background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:14,
+                opacity:tplName.trim()?1:.45}}>
+              Create Template
+            </button>
+          </div>
+          <div style={{fontSize:11,color:'var(--tx3)',marginTop:10,lineHeight:1.5}}>
+            Creates a blank template. Expand it below to add locations and items. Or build from a trip using <strong style={{color:'var(--tx)'}}>+ Save Template</strong> in the trip header.
+          </div>
+        </div>
+
+        {templates&&templates.length>0&&<div style={{display:'flex',justifyContent:'flex-end'}}>
+          <SortControl value={tplSort} onChange={setTplSort}/>
+        </div>}
+
+        {(!templates||templates.length===0)&&<div style={{textAlign:'center',color:'var(--tx3)',
+          padding:'16px 0',fontSize:13}}>
+          No templates yet — create one above.
+        </div>}
+        <div style={{display:'flex',flexDirection:'column',gap:0}} onDragLeave={tplDrag.leave}>
+        {(templates||[]).map(tpl=><TemplateDragWrapper key={tpl.id} tpl={tpl} trips={trips}
+          tplSort={tplSort} tplDrag={tplDrag}
+          isOver={tplDrag.overId===tpl.id&&tplDrag.dragId!==tpl.id}
+          onRenameTemplate={onRenameTemplate}
+          onRemoveTemplateItem={onRemoveTemplateItem}
+          onUpdateTemplateItemQty={onUpdateTemplateItemQty}
+          onUpdateTemplateItemWeight={onUpdateTemplateItemWeight}
+          onRenameTemplateLocation={onRenameTemplateLocation}
+          onAddTemplateItem={onAddTemplateItem}
+          onReorderTemplateItems={onReorderTemplateItems}
+          onDeleteTemplate={onDeleteTemplate}
+          onDuplicateTemplate={onDuplicateTemplate}
+          onApplyTemplateToTrip={onApplyTemplateToTrip}
+          onCreateTripAndApply={onCreateTripAndApply}/>)}
+        {/* Bottom drop zone */}
+        <div data-dndid="__list_bottom__"
+          onDragEnter={e=>{e.preventDefault();tplDrag.enter('__list_bottom__');}}
+          onDragOver={e=>e.preventDefault()}
+          style={{minHeight:32,borderRadius:7}}>
+          {tplDrag.overId==='__list_bottom__'&&tplDrag.dragId&&
+            <div style={{height:3,borderRadius:2,background:'var(--am)',margin:'4px 0'}}/>}
+        </div>
+        </div>
+      </div>}
+    </div>
+  </div>;
+}
+
+/* ── TEMPLATE MODALS ─────────────────────────────────────────────── */
+function SaveTemplateModal({trip,onClose,onSave}){
+  const assignCount=trip.assignments.length;
+  return <Modal title="Save as Template" onClose={onClose}>
+    <div style={{fontSize:12,color:'var(--tx2)',marginBottom:14}}>
+      Saves all <strong style={{color:'var(--tx)'}}>{assignCount} item assignment{assignCount!==1?'s':''}</strong> from
+      this trip — including which bag each item goes in and how many — as a reusable template.
+    </div>
+    <NameInput placeholder="E.g. Business Trip, Beach Week…" onSubmit={n=>{onSave(n);onClose();}}/>
+  </Modal>;
+}
+
+function ApplyTemplateModal({templates,trip,onClose,onApply,onCreateAndApply}){
+  const [creatingFor,setCreatingFor]=useState(null); // tpl.id
+  const [newName,setNewName]=useState('');
+  const newRef=useRef();
+  useEffect(()=>{if(creatingFor)newRef.current?.focus();},[creatingFor]);
+
+  if(!templates||templates.length===0) return <Modal title="Apply Template" onClose={onClose}>
+    <div style={{color:'var(--tx2)',fontSize:13,textAlign:'center',padding:'20px 0'}}>
+      No templates yet. Set up a trip and use "+ Save Template" to create one.
+    </div>
+  </Modal>;
+
+  const locNames=new Set(trip.locations.map(l=>l.name.toLowerCase()));
+  return <Modal title="Apply Template" onClose={onClose} w={440}>
+    <div style={{fontSize:12,color:'var(--tx2)',marginBottom:16}}>
+      Apply to this trip, or create a new one.
+    </div>
+    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+      {templates.slice().sort((a,b)=>b.createdAt-a.createdAt).map(tpl=>{
+        const matchedLocs=new Set(tpl.assignments.map(a=>a.locationName));
+        const matched=[...matchedLocs].filter(n=>locNames.has(n.toLowerCase()));
+        const skipped=[...matchedLocs].filter(n=>!locNames.has(n.toLowerCase()));
+        const isCreating=creatingFor===tpl.id;
+        return <div key={tpl.id} style={{background:'var(--sf2)',border:'1px solid var(--bd)',
+          borderRadius:9,padding:'12px 14px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:isCreating?10:0}}>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:14}}>{tpl.name}</div>
+              <div style={{fontSize:11,color:'var(--tx3)',marginTop:2}}>
+                {tpl.assignments.length} item{tpl.assignments.length!==1?'s':''}
+                {matched.length>0&&<span style={{color:'var(--gn)'}}> · ✓ {matched.join(', ')}</span>}
+                {skipped.length>0&&<span style={{color:'var(--tx3)'}}> · skipped: {skipped.join(', ')}</span>}
+              </div>
+            </div>
+            <div style={{display:'flex',gap:6,flexShrink:0}}>
+              <button onClick={()=>{onApply(tpl.id);onClose();}}
+                style={{padding:'6px 12px',borderRadius:7,background:'var(--am)',
+                  color:'#1a0e00',fontWeight:700,fontSize:12}}>
+                This Trip
+              </button>
+              <button onClick={()=>{setCreatingFor(isCreating?null:tpl.id);setNewName('');}}
+                style={{padding:'6px 10px',borderRadius:7,fontSize:12,fontWeight:600,
+                  background:'var(--am-bg)',border:'1px solid var(--am)',color:'var(--am)'}}>
+                + New
+              </button>
+            </div>
+          </div>
+          {isCreating&&<div style={{display:'flex',gap:8}}>
+            <input ref={newRef} value={newName} onChange={e=>setNewName(e.target.value)}
+              onKeyDown={e=>{
+                if(e.key==='Enter'&&newName.trim()){onCreateAndApply(tpl.id,newName.trim());onClose();}
+                if(e.key==='Escape')setCreatingFor(null);
+              }}
+              placeholder="New trip name…"
+              style={{flex:1,background:'var(--sf)',border:'1px solid var(--am)',borderRadius:7,
+                padding:'8px 10px',color:'var(--tx)',outline:'none',fontSize:13}}/>
+            <button onClick={()=>{if(newName.trim()){onCreateAndApply(tpl.id,newName.trim());onClose();}}}
+              disabled={!newName.trim()}
+              style={{padding:'8px 12px',borderRadius:7,background:'var(--am)',color:'#1a0e00',
+                fontWeight:700,fontSize:13,opacity:newName.trim()?1:.45}}>
+              Create
+            </button>
+          </div>}
+        </div>;
+      })}
+    </div>
+  </Modal>;
+}
+
+/* ── APPLY WARNING MODAL ─────────────────────────────────────────── */
+function ApplyWarningModal({conflicts,onClose}){
+  return <Modal title="Template Applied" onClose={onClose}>
+    <div style={{fontSize:13,color:'var(--tx2)',marginBottom:14,lineHeight:1.6}}>
+      {conflicts.length} item{conflicts.length!==1?'s':''} already existed in this trip with different
+      details. {conflicts.length!==1?'Their existing weights and categories were':'Its existing weight and category was'} kept —
+      the template values below were ignored.
+    </div>
+    <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16}}>
+      {conflicts.map(c=>(
+        <div key={c.name} style={{background:'var(--sf2)',borderRadius:7,padding:'9px 12px'}}>
+          <div style={{fontWeight:600,fontSize:13,color:'var(--tx)',marginBottom:4}}>{c.name}</div>
+          <div style={{display:'flex',flexDirection:'column',gap:2}}>
+            {c.weightMismatch&&<div style={{fontSize:11,color:'var(--tx3)'}}>
+              Weight: <span style={{color:'var(--tx)'}}>{fmtW(c.tripWeight)}</span> kept
+              <span> · template had {fmtW(c.tplWeight)}</span>
+            </div>}
+            {c.catMismatch&&<div style={{fontSize:11,color:'var(--tx3)'}}>
+              Category: <span style={{color:'var(--tx)'}}>{c.tripCat}</span> kept
+              <span> · template had {c.tplCat}</span>
+            </div>}
+          </div>
+        </div>
+      ))}
+    </div>
+    <div style={{fontSize:11,color:'var(--tx3)',marginBottom:16,lineHeight:1.5}}>
+      To update these items to match the template, edit them directly on the board.
+    </div>
+    <button onClick={onClose} style={{width:'100%',padding:'10px',borderRadius:7,
+      background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:13}}>Got it</button>
+  </Modal>;
+}
+
+/* ── RECOVERY SCREEN (password reset via email link) ─────────────── */
+/* ── LOADING SCREEN ──────────────────────────────────────────────── */
+function LoadingScreen({message='Loading…'}){
+  return <div style={{display:'flex',flexDirection:'column',height:'100%',
+    background:'var(--bg)',alignItems:'center',justifyContent:'center',gap:14}}>
+    <div className="bb" style={{fontSize:48,color:'var(--am)',letterSpacing:4}}>PACKR</div>
+    <div style={{fontSize:13,color:'var(--tx3)'}}>{message}</div>
+  </div>;
+}
+
+/* ── AUTH SCREEN ─────────────────────────────────────────────────── */
+function AuthScreen({onSignedIn}){
+  const [error,setError]=useState('');
+  const [loading,setLoading]=useState(false);
+  const gRef=useRef();
+
+  const finish=async(fn)=>{
+    setLoading(true);setError('');
+    try{onSignedIn(await fn());}
+    catch(e){
+      setError(e.code==='account_already_linked'?'This email is already linked to a different sign-in.'
+        :e.code==='not_invited'?'This email has not been invited to Packr yet.'
+        :e.code==='invalid_token'||e.code==='email_not_verified'?'Sign-in could not be verified. Please try again.':e.message);
+      setLoading(false);
+    }
+  };
+
+  useEffect(()=>{
+    if(!GOOGLE_CLIENT_ID)return;
+    let tries=0;
+    const t=setInterval(()=>{
+      if(window.google?.accounts?.id&&gRef.current){
+        clearInterval(t);
+        window.google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,auto_select:false,
+          callback:r=>finish(()=>exchange('google',{idToken:r.credential}))});
+        window.google.accounts.id.renderButton(gRef.current,{theme:'filled_black',size:'large',width:290,text:'signin_with'});
+      }else if(++tries>50){clearInterval(t);setError('Could not load Google sign-in.');}
+    },200);
+    return()=>clearInterval(t);
+  },[]);
+
+  return <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',
+    padding:40,paddingBottom:'calc(40px + env(safe-area-inset-bottom))'}}>
+    <div style={{width:340}}>
+      <div className="bb" style={{fontSize:76,color:'var(--am)',letterSpacing:6,lineHeight:1,
+        marginBottom:8,textAlign:'center'}}>PACKR</div>
+      <div style={{fontSize:14,color:'var(--tx2)',marginBottom:48,letterSpacing:.5,textAlign:'center'}}>
+        Smart packing for smarter travellers
+      </div>
+      <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:24}}>
+        <div style={{display:'flex',justifyContent:'center',minHeight:44,marginBottom:12}}>
+          <div ref={gRef}/>
+        </div>
+        {MS_CLIENT_ID&&<button onClick={()=>finish(async()=>{const m=await msSignIn();return exchange('microsoft',m);})}
+          disabled={loading}
+          style={{width:290,margin:'0 auto',display:'block',padding:'11px',borderRadius:4,
+            background:'var(--sf3)',border:'1px solid var(--bd)',color:'var(--tx)',
+            fontWeight:600,fontSize:14,opacity:loading?.45:1}}>
+          Sign in with Microsoft
+        </button>}
+        {error&&<div style={{color:'var(--rd)',fontSize:12,marginTop:16,padding:'8px 10px',
+          background:'rgba(240,82,82,.08)',borderRadius:6,border:'1px solid rgba(240,82,82,.2)'}}>
+          {error}
+        </div>}
+        <div style={{fontSize:11,color:'var(--tx3)',marginTop:16,textAlign:'center',lineHeight:1.5}}>
+          {MS_CLIENT_ID?'Use the Google or Microsoft account that matches your existing Packr email.':'Use the Google account that matches your existing Packr email.'}
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ── APP ─────────────────────────────────────────────────────────── */
+function App(){
+  const [user,setUser]=useState(null);
+  const [authLoading,setAuthLoading]=useState(true);
+  const [dataLoading,setDataLoading]=useState(true);
+  const [loadError,setLoadError]=useState(false);
+  const [trips,setTrips]=useState([]);
+  const [templates,setTemplates]=useState([]);
+  const [screen,setScreen]=useState('home');
+  const [activeId,setActiveId]=useState(null);
+  const [view,setView]=useState('board');
+  const [drawerItem,setDrawerItem]=useState(null);
+  const [pickerLoc,setPickerLoc]=useState(null);
+  const [modal,setModal]=useState(null);
+  const [saveStatus,setSaveStatus]=useState('idle');
+  const [showDeleteAccount,setShowDeleteAccount]=useState(false); // boolean — controls delete account modal visibility
+  const [conflict,setConflict]=useState(false); // another device saved newer data
+  const version=useRef(0);
+  const [applyWarning,setApplyWarning]=useState(null); // conflicts from template apply, or null
+  const loaded=useRef(false);
+  const saveTimer=useRef(null);
+  const lastSaved=useRef(null); // JSON snapshot of last successfully saved data
+
+  useEffect(()=>{
+    // Restore a saved session, if any
+    if(!getToken()){setAuthLoading(false);return;}
+    api('GET','/me').then(u=>setUser(toUser(u)))
+      .catch(e=>{if(e.status===401)setToken(null);})
+      .finally(()=>setAuthLoading(false));
+  },[]);
+
+  const loadData=()=>{
+    setDataLoading(true);setLoadError(false);setConflict(false);
+    api('GET','/data')
+      .then(({data,version:v})=>{
+        const trips=data?.trips||[];
+        const templates=data?.templates||[];
+        version.current=v;
+        setTrips(trips);
+        setTemplates(templates);
+        // Snapshot what we just loaded so the save effect skips this initial state
+        lastSaved.current=JSON.stringify({trips,templates});
+        setDataLoading(false);
+        loaded.current=true;
+      })
+      .catch(e=>{
+        console.error('Load failed:',e);
+        if(e.status===401){setToken(null);setUser(null);}
+        setDataLoading(false);setLoadError(true);
+      });
+  };
+
+  useEffect(()=>{
+    if(!user){setTrips([]);setTemplates([]);loaded.current=false;lastSaved.current=null;version.current=0;setDataLoading(false);return;}
+    loadData();
+  },[user]);
+
+  // ── saving ──────────────────────────────────────────────────────
+  // Edits are saved 3 s after the last change. A failed save (no connection, server error) is retried a few times with
+  // growing waits, then left as "Not saved" until the browser is back online or you edit again. The page also saves as
+  // soon as it is hidden or closed, so the last edit is not lost. Only network errors and 5xx are retried; 409, 401 and
+  // other 4xx answers will not change by trying again.
+  const latest=useRef({trips:[],templates:[]});
+  latest.current={trips,templates};
+  const saving=useRef(false);
+  const retryTimer=useRef(null);
+  const retryCount=useRef(0);
+  const RETRY_WAITS=[5000,15000,60000];
+
+  const saveNow=async(keepalive)=>{
+    if(!loaded.current||!user||saving.current)return;
+    const snapshot=JSON.stringify(latest.current);
+    if(snapshot===lastSaved.current)return;
+    if(saveTimer.current){clearTimeout(saveTimer.current);saveTimer.current=null;}
+    if(retryTimer.current){clearTimeout(retryTimer.current);retryTimer.current=null;}
+    saving.current=true;
+    setSaveStatus('saving');
+    try{
+      const r=await api('PUT','/data',{data:latest.current,baseVersion:version.current},keepalive?{keepalive:true}:undefined);
+      version.current=r.version;
+      lastSaved.current=snapshot;
+      retryCount.current=0;
+      saving.current=false;
+      setSaveStatus('saved');
+      setTimeout(()=>setSaveStatus(s=>s==='saved'?'idle':s),2000);
+      // edited while this save was in flight: save again
+      if(JSON.stringify(latest.current)!==lastSaved.current){
+        saveTimer.current=setTimeout(()=>saveNow(false),3000);
+      }
+    }catch(e){
+      console.error('Save failed:',e);
+      saving.current=false;
+      if(e.status===409){loaded.current=false;setConflict(true);setSaveStatus('idle');return;}
+      if(e.status===401){setToken(null);setUser(null);return;}
+      const retryable=!e.status||e.status>=500;   // no status = the request never got an answer
+      if(retryable&&retryCount.current<RETRY_WAITS.length){
+        setSaveStatus('unsaved');
+        retryTimer.current=setTimeout(()=>saveNow(false),RETRY_WAITS[retryCount.current++]);
+      }else{
+        setSaveStatus(retryable?'unsaved':'error');
+        if(!retryable)setTimeout(()=>setSaveStatus(s=>s==='error'?'idle':s),4000);
+      }
+    }
+  };
+
+  useEffect(()=>{
+    if(!loaded.current||!user)return;
+    // Skip if nothing actually changed since last save
+    if(JSON.stringify({trips,templates})===lastSaved.current)return;
+    // A new edit restarts the cycle: cancel any pending save or retry and wait 3 s after this change.
+    if(saveTimer.current)clearTimeout(saveTimer.current);
+    if(retryTimer.current){clearTimeout(retryTimer.current);retryTimer.current=null;}
+    retryCount.current=0;
+    saveTimer.current=setTimeout(()=>saveNow(false),3000); // 3s debounce — imperceptible for packing, halves write frequency vs 1.5s
+  },[trips,templates,user]);
+
+  useEffect(()=>{
+    // Page hidden or closed: save now instead of waiting for the timer. keepalive lets the request finish after the page is gone.
+    const onHide=()=>{if(document.visibilityState==='hidden')saveNow(true);};
+    // Connection is back: if something is waiting to be saved, try again from the start.
+    const onOnline=()=>{retryCount.current=0;saveNow(false);};
+    const onPageHide=()=>saveNow(true);
+    document.addEventListener('visibilitychange',onHide);
+    window.addEventListener('pagehide',onPageHide);
+    window.addEventListener('online',onOnline);
+    return()=>{document.removeEventListener('visibilitychange',onHide);window.removeEventListener('pagehide',onPageHide);window.removeEventListener('online',onOnline);};
+  },[user]);
+
+  const signOut=()=>{
+    api('POST','/auth/logout').catch(()=>{});setToken(null);setUser(null);
+    setScreen('home');setActiveId(null);setDrawerItem(null);setPickerLoc(null);
+    loaded.current=false;lastSaved.current=null;
+  };
+
+  const trip=trips.find(t=>t.id===activeId)||null;
+  const mut=fn=>setTrips(ts=>ts.map(t=>t.id===activeId?fn(t):t));
+
+  const addTrip=name=>{const t=mkTrip(name);setTrips(ts=>[...ts,t]);setActiveId(t.id);setScreen('trip');setView('board');};
+  const delTrip=id=>{setTrips(ts=>ts.filter(t=>t.id!==id));if(activeId===id){setActiveId(null);setScreen('home');}};
+  const renameTrip=(id,name)=>setTrips(ts=>ts.map(t=>t.id===id?{...t,name}:t));
+  const reorderTrips=(fromId,toId)=>setTrips(ts=>{
+    const all=[...ts];
+    const fi=all.findIndex(t=>t.id===fromId);
+    if(fi===-1)return ts;
+    if(toId==='__list_bottom__'){const[m]=all.splice(fi,1);all.push(m);return all;}
+    const ti=all.findIndex(t=>t.id===toId);
+    if(ti===-1||fi===ti)return ts;
+    const[moved]=all.splice(fi,1);all.splice(fi<ti?ti-1:ti,0,moved);return all;
+  });
+  const duplicateTrip=id=>{
+    const src=trips.find(t=>t.id===id);
+    if(!src)return;
+    const assignedItemIds=new Set(src.assignments.map(a=>a.itemId));
+    const idMap={};
+    const newLocs=src.locations.map(l=>{const nid=genId();idMap[l.id]=nid;return{...l,id:nid};});
+    const itemIdMap={};
+    const newItems=src.items
+      .filter(i=>assignedItemIds.has(i.id))
+      .map(i=>{const nid=genId();itemIdMap[i.id]=nid;return{...i,id:nid};});
+    const newAssignments=src.assignments.map(a=>({
+      ...a,id:genId(),
+      itemId:itemIdMap[a.itemId]||a.itemId,
+      locationId:idMap[a.locationId]||a.locationId,
+      packed:false,packedQty:0,
+    }));
+    const dup={...src,id:genId(),name:src.name+' (copy)',createdAt:Date.now(),
+      locations:newLocs,items:newItems,assignments:newAssignments};
+    setTrips(ts=>[...ts,dup]);
+  };
+
+  const addLoc=name=>mut(t=>({...t,locations:[...t.locations,
+    {id:genId(),name,color:LOC_COLORS[t.locations.length%LOC_COLORS.length],bagWeight:0,weightLimit:null}]}));
+  const delLoc=id=>{
+    mut(t=>({...t,locations:t.locations.filter(l=>l.id!==id),
+      assignments:t.assignments.filter(a=>a.locationId!==id)}));
+  };
+  const renameLoc=(id,name)=>mut(t=>({...t,locations:t.locations.map(l=>l.id===id?{...l,name}:l)}));
+  const reorderLoc=(id,dir)=>mut(t=>{
+    const locs=[...t.locations];
+    const fi=locs.findIndex(l=>l.id===id);
+    const ti=fi+(dir==='right'?1:-1);
+    if(ti<0||ti>=locs.length)return t;
+    [locs[fi],locs[ti]]=[locs[ti],locs[fi]];
+    return{...t,locations:locs};
+  });
+  const renameItem=(id,name)=>mut(t=>({...t,items:t.items.map(i=>i.id===id?{...i,name}:i)}));
+  const setItemWeight=(id,weight)=>mut(t=>({...t,items:t.items.map(i=>i.id===id?{...i,weight}:i)}));
+  const setItemCategory=(id,category)=>mut(t=>({...t,items:t.items.map(i=>i.id===id?{...i,category}:i)}));
+  const setLocBagWeight=(id,bagWeight)=>mut(t=>({...t,locations:t.locations.map(l=>l.id===id?{...l,bagWeight}:l)}));
+  const setLocWeightLimit=(id,weightLimit)=>mut(t=>({...t,locations:t.locations.map(l=>l.id===id?{...l,weightLimit}:l)}));
+  const delItem=id=>mut(t=>({...t,items:t.items.filter(i=>i.id!==id),assignments:t.assignments.filter(a=>a.itemId!==id)}));
+  const resetPacked=()=>mut(t=>({...t,assignments:t.assignments.map(a=>({...a,packed:false,packedQty:0}))}));
+  const packAllInLoc=locId=>mut(t=>({...t,assignments:t.assignments.map(a=>
+    a.locationId===locId?{...a,packed:true,packedQty:a.quantity}:a)}));
+  const unpackAllInLoc=locId=>mut(t=>({...t,assignments:t.assignments.map(a=>
+    a.locationId===locId?{...a,packed:false,packedQty:0}:a)}));
+  const reorderAssignment=(locationId,fromId,toId)=>mut(t=>{
+    const all=[...t.assignments];
+    const fi=all.findIndex(a=>a.id===fromId);
+    if(fi===-1)return t;
+    // __bottom__: move dragged item to after the last unpacked item in this location
+    if(toId==='__bottom__'){
+      const[moved]=all.splice(fi,1);
+      // Find last unpacked item in this location
+      const lastUnpackedIdx=all.reduce((last,a,i)=>
+        a.locationId===locationId&&!a.packed?i:last,-1);
+      all.splice(lastUnpackedIdx+1,0,moved);
+      return{...t,assignments:all};
+    }
+    const ti=all.findIndex(a=>a.id===toId);
+    if(ti===-1||fi===ti)return t;
+    const[moved]=all.splice(fi,1);
+    const insertAt=fi<ti?ti-1:ti;
+    all.splice(insertAt,0,moved);
+    return{...t,assignments:all};
+  });
+
+  // Templates
+  const saveTemplate=(name)=>{
+    if(!trip)return;
+    const assignments=trip.assignments.map(a=>{
+      const item=trip.items.find(i=>i.id===a.itemId);
+      const loc=trip.locations.find(l=>l.id===a.locationId);
+      return item&&loc?{itemName:item.name,itemCategory:normCat(item.category),itemWeight:item.weight??200,
+        locationName:loc.name,quantity:a.quantity}:null;
+    }).filter(Boolean);
+    setTemplates(ts=>[...ts,{id:genId(),name,createdAt:Date.now(),assignments}]);
+  };
+  const createTemplate=name=>setTemplates(ts=>[...ts,{id:genId(),name,createdAt:Date.now(),assignments:[]}]);
+  const duplicateTemplate=id=>{
+    const src=templates.find(t=>t.id===id);
+    if(!src)return;
+    setTemplates(ts=>[...ts,{...src,id:genId(),name:src.name+' (copy)',createdAt:Date.now()}]);
+  };
+  const delTemplate=id=>setTemplates(ts=>ts.filter(t=>t.id!==id));
+  const renameTemplate=(id,name)=>setTemplates(ts=>ts.map(t=>t.id===id?{...t,name}:t));
+  const reorderTemplates=(fromId,toId)=>setTemplates(ts=>{
+    const all=[...ts];
+    const fi=all.findIndex(t=>t.id===fromId);
+    if(fi===-1)return ts;
+    if(toId==='__list_bottom__'){const[m]=all.splice(fi,1);all.push(m);return all;}
+    const ti=all.findIndex(t=>t.id===toId);
+    if(ti===-1||fi===ti)return ts;
+    const[moved]=all.splice(fi,1);all.splice(fi<ti?ti-1:ti,0,moved);return all;
+  });
+  const removeTemplateItem=(templateId,idx)=>setTemplates(ts=>ts.map(t=>
+    t.id===templateId?{...t,assignments:t.assignments.filter((_,i)=>i!==idx)}:t));
+  const updateTemplateItemQty=(templateId,idx,qty)=>setTemplates(ts=>ts.map(t=>
+    t.id===templateId?{...t,assignments:t.assignments.map((a,i)=>i===idx?{...a,quantity:qty}:a)}:t));
+  const updateTemplateItemWeight=(templateId,idx,weight)=>setTemplates(ts=>ts.map(t=>
+    t.id===templateId?{...t,assignments:t.assignments.map((a,i)=>i===idx?{...a,itemWeight:weight}:a)}:t));
+  const renameTemplateLocation=(templateId,oldName,newName)=>setTemplates(ts=>ts.map(t=>
+    t.id===templateId?{...t,assignments:t.assignments.map(a=>
+      a.locationName===oldName?{...a,locationName:newName}:a)}:t));
+  const addTemplateItem=(templateId,assignment)=>setTemplates(ts=>ts.map(t=>
+    t.id===templateId?{...t,assignments:[...t.assignments,assignment]}:t));
+  const reorderTemplateItems=(templateId,fromIdx,toIdx)=>setTemplates(ts=>ts.map(t=>{
+    if(t.id!==templateId)return t;
+    const all=[...t.assignments];
+    const[moved]=all.splice(fromIdx,1);
+    const insertAt=fromIdx<toIdx?toIdx-1:toIdx;
+    all.splice(insertAt,0,moved);
+    return{...t,assignments:all};
+  }));
+  const applyTemplate=(templateId,targetTripId)=>{
+    const tpl=templates.find(t=>t.id===templateId);
+    const tid=targetTripId||activeId;
+    if(!tpl||!tid)return;
+    // Detect mismatches before applying — items that exist with different weight or category
+    const targetTrip=trips.find(t=>t.id===tid);
+    const conflicts=[];
+    if(targetTrip){
+      tpl.assignments.forEach(({itemName,itemCategory,itemWeight})=>{
+        const existing=targetTrip.items.find(i=>i.name.toLowerCase()===itemName.toLowerCase());
+        if(!existing)return;
+        const weightMismatch=existing.weight!==itemWeight;
+        const catMismatch=normCat(existing.category)!==normCat(itemCategory);
+        if((weightMismatch||catMismatch)&&!conflicts.find(c=>c.name.toLowerCase()===itemName.toLowerCase())){
+          conflicts.push({name:existing.name,
+            tripWeight:existing.weight,tplWeight:itemWeight,weightMismatch,
+            tripCat:normCat(existing.category),tplCat:normCat(itemCategory),catMismatch});
+        }
+      });
+    }
+    setTrips(ts=>ts.map(t=>{
+      if(t.id!==tid)return t;
+      let{items,locations,assignments}=t;
+      tpl.assignments.forEach(({itemName,itemCategory,itemWeight,locationName,quantity})=>{
+        const loc=locations.find(l=>l.name.toLowerCase()===locationName.toLowerCase());
+        if(!loc)return;
+        let item=items.find(i=>i.name.toLowerCase()===itemName.toLowerCase());
+        if(!item){item={id:genId(),name:itemName,category:itemCategory,weight:itemWeight};items=[...items,item];}
+        const exists=assignments.find(a=>a.itemId===item.id&&a.locationId===loc.id);
+        if(!exists)assignments=[...assignments,{id:genId(),itemId:item.id,locationId:loc.id,quantity,packed:false,packedQty:0}];
+      });
+      return{...t,items,assignments};
+    }));
+    if(conflicts.length>0)setApplyWarning(conflicts);
+  };
+
+  // Create a new trip and apply a template to it atomically, then navigate into it
+  const createTripAndApply=(templateId,tripName)=>{
+    const tpl=templates.find(t=>t.id===templateId);
+    const newTrip=mkTrip(tripName);
+    if(tpl){
+      let{items,locations,assignments}=newTrip;
+      tpl.assignments.forEach(({itemName,itemCategory,itemWeight,locationName,quantity})=>{
+        const loc=locations.find(l=>l.name.toLowerCase()===locationName.toLowerCase());
+        if(!loc)return;
+        let item=items.find(i=>i.name.toLowerCase()===itemName.toLowerCase());
+        if(!item){item={id:genId(),name:itemName,category:itemCategory,weight:itemWeight};items=[...items,item];}
+        const exists=assignments.find(a=>a.itemId===item.id&&a.locationId===loc.id);
+        if(!exists)assignments=[...assignments,{id:genId(),itemId:item.id,locationId:loc.id,quantity,packed:false,packedQty:0}];
+      });
+      newTrip.items=items;newTrip.assignments=assignments;
+    }
+    setTrips(ts=>[...ts,newTrip]);
+    setActiveId(newTrip.id);setScreen('trip');setView('board');
+    setDrawerItem(null);setPickerLoc(null);
+  };
+
+  const setAssign=(itemId,locationId,quantity)=>mut(t=>{
+    if(quantity<=0)return{...t,assignments:t.assignments.filter(a=>!(a.itemId===itemId&&a.locationId===locationId))};
+    const ex=t.assignments.find(a=>a.itemId===itemId&&a.locationId===locationId);
+    if(ex)return{...t,assignments:t.assignments.map(a=>a.itemId===itemId&&a.locationId===locationId?{...a,quantity}:a)};
+    return{...t,assignments:[...t.assignments,{id:genId(),itemId,locationId,quantity,packed:false,packedQty:0}]};
+  });
+  const togPacked=(itemId,locationId)=>mut(t=>({...t,
+    assignments:t.assignments.map(a=>{
+      if(a.itemId!==itemId||a.locationId!==locationId)return a;
+      const full=isFullyPacked(a);
+      return full?{...a,packed:false,packedQty:0}:{...a,packed:true,packedQty:a.quantity};
+    })}));
+  const setAssignPackedQty=(itemId,locationId,qty)=>mut(t=>({...t,
+    assignments:t.assignments.map(a=>{
+      if(a.itemId!==itemId||a.locationId!==locationId)return a;
+      const clamped=Math.max(0,Math.min(qty,a.quantity));
+      return{...a,packedQty:clamped,packed:clamped>=a.quantity};
+    })}));
+
+  const goHome=()=>{setScreen('home');setDrawerItem(null);setPickerLoc(null);};
+  const openTrip=id=>{setActiveId(id);setScreen('trip');setDrawerItem(null);setPickerLoc(null);setView('board');};
+  const activeItem=trip?.items.find(i=>i.id===drawerItem);
+  const pickerLocObj=trip?.locations.find(l=>l.id===pickerLoc);
+
+  if(authLoading)return <LoadingScreen/>;
+  if(!user)return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)'}}><AuthScreen onSignedIn={u=>setUser(u)}/></div>;
+  if(dataLoading)return <LoadingScreen message="Loading your trips…"/>;
+  if(conflict)return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)',
+    alignItems:'center',justifyContent:'center',gap:16,padding:40}}>
+    <div style={{fontSize:32}}>⚠</div>
+    <div style={{fontSize:16,fontWeight:600,color:'var(--tx)'}}>Your trips changed on another device</div>
+    <div style={{fontSize:13,color:'var(--tx3)',textAlign:'center',maxWidth:320}}>Your latest edit was not saved, so nothing was overwritten. Reload to get the newest version.</div>
+    <button onClick={loadData}
+      style={{padding:'10px 24px',borderRadius:8,background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:14}}>
+      Reload latest
+    </button>
+  </div>;
+  if(loadError)return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)',
+    alignItems:'center',justifyContent:'center',gap:16,padding:40}}>
+    <div style={{fontSize:32}}>⚠</div>
+    <div style={{fontSize:16,fontWeight:600,color:'var(--tx)'}}>Couldn't load your data</div>
+    <div style={{fontSize:13,color:'var(--tx3)',textAlign:'center'}}>Check your internet connection and try again.</div>
+    <button onClick={loadData}
+      style={{padding:'10px 24px',borderRadius:8,background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:14}}>
+      Try Again
+    </button>
+    <button onClick={signOut} style={{fontSize:12,color:'var(--tx3)'}}>Sign out</button>
+  </div>;
+
+  return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)'}}>
+
+    {screen==='home'&&<>
+      <div style={{display:'flex',alignItems:'center',padding:'0 16px',height:54,
+        background:'var(--sf)',borderBottom:'1px solid var(--bd)',flexShrink:0,gap:8}}>
+        <div className="bb" style={{fontSize:24,color:'var(--am)',letterSpacing:3,flexShrink:0}}>PACKR</div>
+        <div style={{flex:1,minWidth:0}}/>
+        <SaveIndicator status={saveStatus}/>
+        <UserMenu user={user} onUpdate={u=>setUser(u)}
+          onSignOut={signOut}
+          onDeleteAccount={()=>setShowDeleteAccount(true)}/>
+      </div>
+      {showDeleteAccount&&<DeleteAccountModal
+        onClose={()=>setShowDeleteAccount(false)}
+        onDeleted={signOut}/>}
+      <HomeScreen trips={trips} templates={templates} onCreate={addTrip} onSelect={openTrip}
+        onDelete={delTrip} onRename={renameTrip} onDuplicate={duplicateTrip}
+        onReorderTrips={reorderTrips}
+        onReorderTemplates={reorderTemplates}
+        onDeleteTemplate={delTemplate}
+        onRenameTemplate={renameTemplate}
+        onRemoveTemplateItem={removeTemplateItem}
+        onUpdateTemplateItemQty={updateTemplateItemQty}
+        onUpdateTemplateItemWeight={updateTemplateItemWeight}
+        onRenameTemplateLocation={renameTemplateLocation}
+        onAddTemplateItem={addTemplateItem}
+        onReorderTemplateItems={reorderTemplateItems}
+        onCreateTemplate={createTemplate}
+        onDuplicateTemplate={duplicateTemplate}
+        onCreateTripAndApply={createTripAndApply}
+        onApplyTemplateToTrip={(templateId,tripId)=>{
+          applyTemplate(templateId,tripId);
+          openTrip(tripId);
+        }}/>
+    </>}
+
+    {screen==='trip'&&trip&&<>
+      <TripHeader trip={trip} onHome={goHome}
+        onRename={name=>renameTrip(activeId,name)}
+        onSignOut={signOut}
+        onDeleteAccount={()=>setShowDeleteAccount(true)}
+        user={user} onUpdateUser={u=>setUser(u)}
+        onSaveTemplate={()=>setModal({type:'save-template'})}
+        onApplyTemplate={()=>setModal({type:'apply-template'})}
+        saveStatus={saveStatus}
+        view={view} onView={setView}/>
+      {view==='board'
+        ?<Board trip={trip}
+            onAdd={id=>setPickerLoc(id)}
+            onQty={setAssign}
+            onSetPackedQty={setAssignPackedQty}
+            onOpen={id=>setDrawerItem(id)}
+            onAddLoc={()=>setModal({type:'add-loc'})}
+            onRenameLoc={id=>setModal({type:'rename-loc',id})}
+            onSetBagWeight={id=>setModal({type:'set-bag-weight',id})}
+            onSetWeightLimit={id=>setModal({type:'set-weight-limit',id})}
+            onDelLoc={delLoc}
+            onReorder={reorderAssignment}
+            onPackAll={packAllInLoc}
+            onUnpackAll={unpackAllInLoc}
+            onReorderLoc={reorderLoc}/>
+        :<Summary trip={trip} onResetPacked={resetPacked}/>
+      }
+
+      {activeItem&&<ItemDrawer item={activeItem} locations={trip.locations}
+        assignments={trip.assignments.filter(a=>a.itemId===activeItem.id)}
+        onClose={()=>setDrawerItem(null)}
+        onQty={(locId,qty)=>setAssign(activeItem.id,locId,qty)}
+        onToggle={locId=>togPacked(activeItem.id,locId)}
+        onRename={name=>renameItem(activeItem.id,name)}
+        onSetWeight={w=>setItemWeight(activeItem.id,w)}
+        onSetCategory={cat=>setItemCategory(activeItem.id,cat)}
+        onDel={()=>{delItem(activeItem.id);setDrawerItem(null);}}/>}
+
+      {pickerLocObj&&<Picker items={trip.items} assignments={trip.assignments}
+        locId={pickerLoc} loc={pickerLocObj}
+        onClose={()=>setPickerLoc(null)}
+        onSelect={itemId=>{setAssign(itemId,pickerLoc,1);setPickerLoc(null);setDrawerItem(itemId);}}
+        onMultiAdd={selectedItems=>{
+          mut(t=>{
+            let{items:tripItems,assignments}=t;
+            selectedItems.forEach(item=>{
+              let tripItem;
+              if(item._fromMaster){
+                tripItem=tripItems.find(i=>i.name.toLowerCase()===item.name.toLowerCase());
+                if(!tripItem){
+                  tripItem={id:genId(),name:item.name,category:item.category||'Other',weight:item.weight||200};
+                  tripItems=[...tripItems,tripItem];
+                }
+              }else{
+                tripItem=tripItems.find(i=>i.id===item.id);
+              }
+              if(!tripItem)return;
+              const exists=assignments.find(a=>a.itemId===tripItem.id&&a.locationId===pickerLoc);
+              if(!exists)assignments=[...assignments,{id:genId(),itemId:tripItem.id,locationId:pickerLoc,quantity:1,packed:false,packedQty:0}];
+            });
+            return{...t,items:tripItems,assignments};
+          });
+          setPickerLoc(null);
+        }}
+        onCreateAdd={(name,category,weight)=>{
+          const nid=genId();
+          mut(t=>({...t,
+            items:[...t.items,{id:nid,name,category:category||'Other',weight:weight||200}],
+            assignments:[...t.assignments,{id:genId(),itemId:nid,locationId:pickerLoc,quantity:1,packed:false,packedQty:0}],
+          }));
+          setPickerLoc(null);setDrawerItem(nid);
+        }}/>}
+
+      {modal?.type==='add-loc'&&<Modal title="Add Location" onClose={()=>setModal(null)}>
+        <NameInput placeholder="E.g. Hotel Safe" onSubmit={n=>{addLoc(n);setModal(null);}}/>
+      </Modal>}
+      {modal?.type==='rename-loc'&&<Modal title="Rename Location" onClose={()=>setModal(null)}>
+        <NameInput defVal={trip.locations.find(l=>l.id===modal.id)?.name||''}
+          onSubmit={n=>{renameLoc(modal.id,n);setModal(null);}}/>
+      </Modal>}
+      {modal?.type==='set-bag-weight'&&trip&&(()=>{
+        const loc=trip.locations.find(l=>l.id===modal.id);
+        return <BagWeightModal loc={loc} onClose={()=>setModal(null)}
+          onSave={w=>{setLocBagWeight(modal.id,w);setModal(null);}}/>;
+      })()}
+      {modal?.type==='set-weight-limit'&&trip&&(()=>{
+        const loc=trip.locations.find(l=>l.id===modal.id);
+        return <WeightLimitModal loc={loc} onClose={()=>setModal(null)}
+          onSave={w=>{setLocWeightLimit(modal.id,w);setModal(null);}}/>;
+      })()}
+      {modal?.type==='save-template'&&trip&&
+        <SaveTemplateModal trip={trip} onClose={()=>setModal(null)} onSave={saveTemplate}/>}
+      {showDeleteAccount&&<DeleteAccountModal
+        onClose={()=>setShowDeleteAccount(false)}
+        onDeleted={signOut}/>}
+      {modal?.type==='apply-template'&&trip&&
+        <ApplyTemplateModal templates={templates} trip={trip}
+          onClose={()=>setModal(null)} onApply={applyTemplate}
+          onCreateAndApply={(tplId,name)=>createTripAndApply(tplId,name)}/>}
+    </>}
+    {applyWarning&&<ApplyWarningModal conflicts={applyWarning} onClose={()=>setApplyWarning(null)}/>}
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
