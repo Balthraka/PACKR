@@ -4,10 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>PACKR</title>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.15/babel.min.js" integrity="sha384-Ss/vAy5WJ/pgOuQj8fpWo8I/lIbCYJW0kNY8PbhsygEsxmwpdsXz47HC5+sIUypz" crossorigin="anonymous"></script>
+<script>if(window.name==="packr-ms"&&/id_token|error/.test(location.hash))window.stop();</script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -117,10 +118,55 @@ input,textarea{font-family:inherit;font-size:14px}
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
-/* ── SUPABASE ────────────────────────────────────────────────────── */
-const SUPA_URL = 'https://oroachpdvlczplpqspmd.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yb2FjaHBkdmxjenBscHFzcG1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNzIwMTgsImV4cCI6MjA5NTY0ODAxOH0.oSeTXyeqel9CFfWyT82c8IAek6SrIup8brdvJJ_u_F4';
-const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+/* ── API (Cloudflare Worker) ─────────────────────────────────────────
+   Public identifiers only — no secrets live in this file. */
+const API_URL = 'https://packr-api.balthraka.workers.dev';
+const GOOGLE_CLIENT_ID = '970644446622-o9q0heq11p08mktrkjja102ju66tdr25.apps.googleusercontent.com';   // from Google Cloud OAuth client
+const MS_CLIENT_ID = '';       // from Microsoft Entra app registration
+
+const TOKEN_KEY='packr_token';
+const getToken=()=>{try{return localStorage.getItem(TOKEN_KEY);}catch{return null;}};
+const setToken=t=>{try{t?localStorage.setItem(TOKEN_KEY,t):localStorage.removeItem(TOKEN_KEY);}catch{}};
+class ApiError extends Error{constructor(status,code,body){super(code||('HTTP '+status));this.status=status;this.code=code;this.body=body;}}
+async function api(method,path,body,opts){
+  const t=getToken();
+  const res=await fetch(API_URL+path,{method,
+    headers:{...(body!==undefined?{'content-type':'application/json'}:{}),...(t?{authorization:'Bearer '+t}:{})},
+    body:body===undefined?undefined:JSON.stringify(body),...(opts||{})});
+  let data=null;try{data=await res.json();}catch{}
+  if(!res.ok)throw new ApiError(res.status,data?.error,data);
+  return data;
+}
+// The UI reads user.id / user.email / user.user_metadata.display_name
+const toUser=u=>({id:u.id,email:u.email,user_metadata:{display_name:u.displayName||''}});
+
+function msSignIn(){
+  return new Promise((resolve,reject)=>{
+    if(!MS_CLIENT_ID)return reject(new Error('Microsoft sign-in is not configured.'));
+    const nonce=crypto.randomUUID(),state=crypto.randomUUID();
+    const redirect=location.origin+location.pathname;
+    const url='https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?'+new URLSearchParams({
+      client_id:MS_CLIENT_ID,response_type:'id_token',redirect_uri:redirect,
+      scope:'openid email profile',response_mode:'fragment',nonce,state,prompt:'select_account'});
+    const w=window.open(url,'packr-ms','width=480,height=640');
+    if(!w)return reject(new Error('Popup was blocked. Allow popups for this site and try again.'));
+    const timer=setInterval(()=>{
+      if(w.closed){clearInterval(timer);return reject(new Error('Sign-in window was closed.'));}
+      let href='';try{href=w.location.href;}catch{return;}   // cross-origin while on Microsoft
+      if(!href.startsWith(redirect)||!w.location.hash)return;
+      const h=new URLSearchParams(w.location.hash.slice(1));
+      clearInterval(timer);w.close();
+      if(h.get('error'))return reject(new Error(h.get('error_description')||h.get('error')));
+      if(h.get('state')!==state||!h.get('id_token'))return reject(new Error('Sign-in failed.'));
+      resolve({idToken:h.get('id_token'),nonce});
+    },200);
+  });
+}
+async function exchange(provider,payload){
+  const r=await api('POST','/auth/'+provider,payload);
+  setToken(r.token);
+  return toUser(r.user);
+}
 
 /* ── CONSTANTS ───────────────────────────────────────────────────── */
 const genId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
@@ -1666,63 +1712,13 @@ function SaveIndicator({status}){
     saving:{text:'Saving…',color:'var(--tx3)'},
     saved: {text:'✓ Saved', color:'var(--gn)'},
     error: {text:'⚠ Save failed',color:'var(--rd)'},
+    unsaved:{text:'⚠ Not saved. Will retry',color:'var(--rd)'},
   }[status]||{};
   return <span style={{fontSize:11,color:cfg.color,marginRight:10,
     transition:'opacity .3s',whiteSpace:'nowrap'}}>{cfg.text}</span>;
 }
 
 /* ── CHANGE PASSWORD MODAL ───────────────────────────────────────── */
-function ChangePasswordModal({onClose}){
-  const [pw,setPw]=useState('');
-  const [confirm,setConfirm]=useState('');
-  const [status,setStatus]=useState(''); // '' | 'saving' | 'error'
-  const [errMsg,setErrMsg]=useState('');
-  const ref=useRef();
-  useEffect(()=>{ref.current?.focus();},[]);
-
-  const save=async()=>{
-    if(!pw||pw.length<6){setErrMsg('Password must be at least 6 characters.');return;}
-    if(pw!==confirm){setErrMsg('Passwords do not match.');return;}
-    setStatus('saving');setErrMsg('');
-    try{
-      const{error}=await sb.auth.updateUser({password:pw});
-      if(error)throw error;
-      onClose('success'); // close immediately, pass success signal
-    }catch(e){
-      setErrMsg(e.message||'Something went wrong.');
-      setStatus('');
-    }
-  };
-
-  return <Modal title="Change Password" onClose={()=>onClose()}>
-    <div style={{display:'flex',flexDirection:'column',gap:12}}>
-      <div>
-        <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,textTransform:'uppercase',letterSpacing:.7}}>New Password</div>
-        <input ref={ref} type="password" value={pw} onChange={e=>setPw(e.target.value)}
-          onKeyDown={e=>e.key==='Enter'&&save()}
-          style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
-            borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
-      </div>
-      <div>
-        <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,textTransform:'uppercase',letterSpacing:.7}}>Confirm Password</div>
-        <input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)}
-          onKeyDown={e=>e.key==='Enter'&&save()}
-          style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
-            borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
-      </div>
-      {errMsg&&<div style={{fontSize:12,color:'var(--rd)',padding:'8px 10px',
-        background:'rgba(240,82,82,.08)',borderRadius:6,border:'1px solid rgba(240,82,82,.2)'}}>
-        {errMsg}
-      </div>}
-      <button onClick={save} disabled={status==='saving'}
-        style={{width:'100%',padding:'11px',borderRadius:8,background:'var(--am)',
-          color:'#1a0e00',fontWeight:700,fontSize:14,opacity:status==='saving'?'.6':'1'}}>
-        {status==='saving'?'Updating…':'Update Password'}
-      </button>
-    </div>
-  </Modal>;
-}
-
 /* ── DELETE ACCOUNT MODAL ────────────────────────────────────────── */
 function DeleteAccountModal({onClose,onDeleted}){
   const [step,setStep]=useState(1); // 1=warning, 2=confirm
@@ -1733,8 +1729,7 @@ function DeleteAccountModal({onClose,onDeleted}){
   const doDelete=async()=>{
     setLoading(true);setErr('');
     try{
-      const{error}=await sb.rpc('delete_my_account');
-      if(error)throw error;
+      await api('DELETE','/me');
       onDeleted();
     }catch(e){
       setErr(e.message||'Something went wrong. Please try again.');
@@ -1790,7 +1785,7 @@ function DeleteAccountModal({onClose,onDeleted}){
 }
 
 /* ── USER MENU (cog) ─────────────────────────────────────────────── */
-function UserMenu({user,onUpdate,onChangePw,onSignOut,onDeleteAccount,pwSuccess}){
+function UserMenu({user,onUpdate,onSignOut,onDeleteAccount}){
   const [open,setOpen]=useState(false);
   const ref=useRef();
   useEffect(()=>{
@@ -1808,21 +1803,15 @@ function UserMenu({user,onUpdate,onChangePw,onSignOut,onDeleteAccount,pwSuccess}
         display:'flex',alignItems:'center',justifyContent:'center',
         background:open?'var(--sf3)':'transparent',
         border:'1px solid '+(open?'var(--bd)':'transparent'),
-        color:pwSuccess?'var(--gn)':'var(--tx3)',
+        color:'var(--tx3)',
         transition:'all .15s'}}
       onMouseEnter={e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.borderColor='var(--bd)';}}
       onMouseLeave={e=>{if(!open){e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent';}}}>
-      {pwSuccess?'✓':'⚙'}
+      ⚙
     </button>
     {open&&<div style={{position:'absolute',right:0,top:'calc(100% + 6px)',
       background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:9,
       boxShadow:'0 8px 32px rgba(0,0,0,.5)',zIndex:300,minWidth:180,overflow:'hidden'}}>
-      <button onClick={()=>{setOpen(false);onChangePw();}}
-        style={{display:'block',width:'100%',padding:'11px 16px',fontSize:13,
-          color:'var(--tx)',textAlign:'left'}}>
-        🔑 Change Password
-      </button>
-      <div style={{height:1,background:'var(--bd)'}}/>
       <button onClick={()=>{setOpen(false);onSignOut();}}
         style={{display:'block',width:'100%',padding:'11px 16px',fontSize:13,
           color:'var(--tx)',textAlign:'left'}}>
@@ -1851,9 +1840,8 @@ function DisplayName({user,onUpdate}){
     if(!v||v===(user?.user_metadata?.display_name||''))return;
     setFeedback('saving');
     try{
-      const{data,error}=await sb.auth.updateUser({data:{display_name:v}});
-      if(error)throw error;
-      if(data?.user)onUpdate(data.user);
+      const u=await api('PATCH','/me',{displayName:v});
+      onUpdate(toUser(u));
       setFeedback('saved');
       setTimeout(()=>setFeedback(''),2000);
     }catch{
@@ -1890,7 +1878,7 @@ function DisplayName({user,onUpdate}){
 }
 
 /* ── TRIP HEADER ─────────────────────────────────────────────────── */
-function TripHeader({trip,onHome,onRename,onSignOut,onChangePw,onDeleteAccount,pwSuccess,user,onUpdateUser,onSaveTemplate,onApplyTemplate,saveStatus,view,onView}){
+function TripHeader({trip,onHome,onRename,onSignOut,onDeleteAccount,user,onUpdateUser,onSaveTemplate,onApplyTemplate,saveStatus,view,onView}){
   const [editing,setEditing]=useState(false);
   const [val,setVal]=useState('');
   const [mobileMenu,setMobileMenu]=useState(false);
@@ -1960,8 +1948,8 @@ function TripHeader({trip,onHome,onRename,onSignOut,onChangePw,onDeleteAccount,p
       <div style={{width:1,height:20,background:'var(--bd)'}}/>
       <SaveIndicator status={saveStatus}/>
       <UserMenu user={user} onUpdate={onUpdateUser}
-        onChangePw={onChangePw} onSignOut={onSignOut}
-        onDeleteAccount={onDeleteAccount} pwSuccess={pwSuccess}/>
+        onSignOut={onSignOut}
+        onDeleteAccount={onDeleteAccount}/>
     </div>
 
     {/* Mobile overflow menu */}
@@ -1991,11 +1979,6 @@ function TripHeader({trip,onHome,onRename,onSignOut,onChangePw,onDeleteAccount,p
           </button>
         ))}
         <div style={{height:1,background:'var(--bd)'}}/>
-        <button onClick={()=>{onChangePw();setMobileMenu(false);}}
-          style={{display:'block',width:'100%',padding:'11px 14px',fontSize:13,
-            color:'var(--tx)',textAlign:'left'}}>
-          {pwSuccess?'✓ Password Updated':'🔑 Change Password'}
-        </button>
         <button onClick={()=>{onSignOut();setMobileMenu(false);}}
           style={{display:'block',width:'100%',padding:'11px 14px',fontSize:13,
             color:'var(--tx)',textAlign:'left'}}>
@@ -2946,78 +2929,6 @@ function ApplyWarningModal({conflicts,onClose}){
 }
 
 /* ── RECOVERY SCREEN (password reset via email link) ─────────────── */
-function RecoveryScreen({onDone}){
-  const [pw,setPw]=useState('');
-  const [confirm,setConfirm]=useState('');
-  const [status,setStatus]=useState(''); // '' | 'saving' | 'success'
-  const [errMsg,setErrMsg]=useState('');
-  const ref=useRef();
-  useEffect(()=>{ref.current?.focus();},[]);
-
-  const save=async()=>{
-    if(!pw||pw.length<6){setErrMsg('Password must be at least 6 characters.');return;}
-    if(pw!==confirm){setErrMsg('Passwords do not match.');return;}
-    setStatus('saving');setErrMsg('');
-    try{
-      const{error}=await sb.auth.updateUser({password:pw});
-      if(error)throw error;
-      setStatus('success');
-      setTimeout(()=>onDone(),1500);
-    }catch(e){
-      setErrMsg(e.message||'Something went wrong.');
-      setStatus('');
-    }
-  };
-
-  return <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',
-    padding:40,paddingBottom:'calc(40px + env(safe-area-inset-bottom))'}}>
-    <div style={{width:340}}>
-      <div className="bb" style={{fontSize:76,color:'var(--am)',letterSpacing:6,lineHeight:1,
-        marginBottom:8,textAlign:'center'}}>PACKR</div>
-      <div style={{fontSize:14,color:'var(--tx2)',marginBottom:48,letterSpacing:.5,textAlign:'center'}}>
-        Set your new password
-      </div>
-      <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:24}}>
-        {status==='success'
-          ?<div style={{textAlign:'center',padding:'20px 0'}}>
-              <div style={{fontSize:40,marginBottom:12,color:'var(--gn)'}}>✓</div>
-              <div style={{fontSize:15,fontWeight:700,color:'var(--gn)'}}>Password updated!</div>
-              <div style={{fontSize:12,color:'var(--tx3)',marginTop:6}}>Taking you to your trips…</div>
-            </div>
-          :<div style={{display:'flex',flexDirection:'column',gap:12}}>
-              <div>
-                <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,
-                  textTransform:'uppercase',letterSpacing:.7}}>New Password</div>
-                <input ref={ref} type="password" value={pw} onChange={e=>setPw(e.target.value)}
-                  onKeyDown={e=>e.key==='Enter'&&save()}
-                  style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
-                    borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
-              </div>
-              <div>
-                <div style={{fontSize:11,color:'var(--tx3)',marginBottom:5,
-                  textTransform:'uppercase',letterSpacing:.7}}>Confirm Password</div>
-                <input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)}
-                  onKeyDown={e=>e.key==='Enter'&&save()}
-                  style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
-                    borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
-              </div>
-              {errMsg&&<div style={{fontSize:12,color:'var(--rd)',padding:'8px 10px',
-                background:'rgba(240,82,82,.08)',borderRadius:6,border:'1px solid rgba(240,82,82,.2)'}}>
-                {errMsg}
-              </div>}
-              <button onClick={save} disabled={status==='saving'}
-                style={{width:'100%',padding:'11px',borderRadius:8,background:'var(--am)',
-                  color:'#1a0e00',fontWeight:700,fontSize:14,
-                  opacity:status==='saving'?'.6':'1'}}>
-                {status==='saving'?'Updating…':'Set New Password'}
-              </button>
-            </div>
-        }
-      </div>
-    </div>
-  </div>;
-}
-
 /* ── LOADING SCREEN ──────────────────────────────────────────────── */
 function LoadingScreen({message='Loading…'}){
   return <div style={{display:'flex',flexDirection:'column',height:'100%',
@@ -3028,41 +2939,35 @@ function LoadingScreen({message='Loading…'}){
 }
 
 /* ── AUTH SCREEN ─────────────────────────────────────────────────── */
-function AuthScreen(){
-  const [mode,setMode]=useState('signin');
-  const [email,setEmail]=useState('');
-  const [password,setPassword]=useState('');
-  const [loading,setLoading]=useState(false);
+function AuthScreen({onSignedIn}){
   const [error,setError]=useState('');
-  const [message,setMessage]=useState('');
-  const pwRef=useRef();
+  const [loading,setLoading]=useState(false);
+  const gRef=useRef();
 
-  const handle=async()=>{
-    if(!email||!password)return;
-    setLoading(true);setError('');setMessage('');
-    try{
-      if(mode==='signup'){
-        const{error:e}=await sb.auth.signUp({email,password});
-        if(e)throw e;
-        setMessage('Check your email to confirm your account, then sign in.');
-      }else{
-        const{error:e}=await sb.auth.signInWithPassword({email,password});
-        if(e)throw e;
-      }
-    }catch(e){setError(e.message);}
-    setLoading(false);
-  };
-
-  const forgotPassword=async()=>{
-    if(!email){setError('Enter your email address above first.');return;}
+  const finish=async(fn)=>{
     setLoading(true);setError('');
-    // redirectTo sends the user back to this exact page after clicking the email link
-    const redirectTo=window.location.href.split('#')[0];
-    const{error:e}=await sb.auth.resetPasswordForEmail(email,{redirectTo});
-    setLoading(false);
-    if(e)setError(e.message);
-    else setMessage('Password reset email sent — check your inbox.');
+    try{onSignedIn(await fn());}
+    catch(e){
+      setError(e.code==='account_already_linked'?'This email is already linked to a different sign-in.'
+        :e.code==='not_invited'?'This email has not been invited to Packr yet.'
+        :e.code==='invalid_token'||e.code==='email_not_verified'?'Sign-in could not be verified. Please try again.':e.message);
+      setLoading(false);
+    }
   };
+
+  useEffect(()=>{
+    if(!GOOGLE_CLIENT_ID)return;
+    let tries=0;
+    const t=setInterval(()=>{
+      if(window.google?.accounts?.id&&gRef.current){
+        clearInterval(t);
+        window.google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,auto_select:false,
+          callback:r=>finish(()=>exchange('google',{idToken:r.credential}))});
+        window.google.accounts.id.renderButton(gRef.current,{theme:'filled_black',size:'large',width:290,text:'signin_with'});
+      }else if(++tries>50){clearInterval(t);setError('Could not load Google sign-in.');}
+    },200);
+    return()=>clearInterval(t);
+  },[]);
 
   return <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',
     padding:40,paddingBottom:'calc(40px + env(safe-area-inset-bottom))'}}>
@@ -3072,61 +2977,24 @@ function AuthScreen(){
       <div style={{fontSize:14,color:'var(--tx2)',marginBottom:48,letterSpacing:.5,textAlign:'center'}}>
         Smart packing for smarter travellers
       </div>
-
       <div style={{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:24}}>
-        <div style={{display:'flex',background:'var(--sf2)',borderRadius:7,
-          border:'1px solid var(--bd)',padding:2,marginBottom:22}}>
-          {[['signin','Sign In'],['signup','Sign Up']].map(([v,l])=>(
-            <button key={v} onClick={()=>{setMode(v);setError('');setMessage('');}}
-              style={{flex:1,padding:'6px',borderRadius:5,fontSize:13,fontWeight:600,
-                background:mode===v?'var(--sf3)':'transparent',
-                color:mode===v?'var(--tx)':'var(--tx2)'}}>
-              {l}
-            </button>
-          ))}
+        <div style={{display:'flex',justifyContent:'center',minHeight:44,marginBottom:12}}>
+          <div ref={gRef}/>
         </div>
-
-        <div style={{marginBottom:12}}>
-          <label htmlFor="auth-email" style={{display:'block',fontSize:11,color:'var(--tx3)',marginBottom:5,
-            textTransform:'uppercase',letterSpacing:.7}}>Email</label>
-          <input id="auth-email" type="email" value={email} onChange={e=>setEmail(e.target.value)}
-            onKeyDown={e=>e.key==='Enter'&&pwRef.current?.focus()} autoFocus
-            style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
-              borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
-        </div>
-        <div style={{marginBottom:8}}>
-          <label htmlFor="auth-password" style={{display:'block',fontSize:11,color:'var(--tx3)',marginBottom:5,
-            textTransform:'uppercase',letterSpacing:.7}}>Password</label>
-          <input id="auth-password" ref={pwRef} type="password" value={password} onChange={e=>setPassword(e.target.value)}
-            onKeyDown={e=>e.key==='Enter'&&handle()}
-            style={{width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',
-              borderRadius:7,padding:'10px 12px',color:'var(--tx)',outline:'none'}}/>
-        </div>
-
-        {mode==='signin'&&<div style={{textAlign:'right',marginBottom:16}}>
-          <button onClick={forgotPassword} disabled={loading}
-            style={{fontSize:11,color:'var(--tx3)',padding:'2px 0',
-              textDecoration:'underline',background:'none'}}>
-            Forgot password?
-          </button>
-        </div>}
-        {mode==='signup'&&<div style={{marginBottom:16}}/>}
-
-        {error&&<div style={{color:'var(--rd)',fontSize:12,marginBottom:14,padding:'8px 10px',
+        {MS_CLIENT_ID&&<button onClick={()=>finish(async()=>{const m=await msSignIn();return exchange('microsoft',m);})}
+          disabled={loading}
+          style={{width:290,margin:'0 auto',display:'block',padding:'11px',borderRadius:4,
+            background:'var(--sf3)',border:'1px solid var(--bd)',color:'var(--tx)',
+            fontWeight:600,fontSize:14,opacity:loading?.45:1}}>
+          Sign in with Microsoft
+        </button>}
+        {error&&<div style={{color:'var(--rd)',fontSize:12,marginTop:16,padding:'8px 10px',
           background:'rgba(240,82,82,.08)',borderRadius:6,border:'1px solid rgba(240,82,82,.2)'}}>
           {error}
         </div>}
-        {message&&<div style={{color:'var(--gn)',fontSize:12,marginBottom:14,padding:'8px 10px',
-          background:'rgba(63,214,138,.08)',borderRadius:6,border:'1px solid rgba(63,214,138,.2)'}}>
-          {message}
-        </div>}
-
-        <button onClick={handle} disabled={loading||!email||!password}
-          style={{width:'100%',padding:'11px',borderRadius:8,background:'var(--am)',
-            color:'#1a0e00',fontWeight:700,fontSize:14,
-            opacity:loading||!email||!password?'.45':'1'}}>
-          {loading?'…':mode==='signin'?'Sign In':'Create Account'}
-        </button>
+        <div style={{fontSize:11,color:'var(--tx3)',marginTop:16,textAlign:'center',lineHeight:1.5}}>
+          {MS_CLIENT_ID?'Use the Google or Microsoft account that matches your existing Packr email.':'Use the Google account that matches your existing Packr email.'}
+        </div>
       </div>
     </div>
   </div>;
@@ -3138,7 +3006,6 @@ function App(){
   const [authLoading,setAuthLoading]=useState(true);
   const [dataLoading,setDataLoading]=useState(true);
   const [loadError,setLoadError]=useState(false);
-  const [rowId,setRowId]=useState(null);
   const [trips,setTrips]=useState([]);
   const [templates,setTemplates]=useState([]);
   const [screen,setScreen]=useState('home');
@@ -3148,80 +3015,121 @@ function App(){
   const [pickerLoc,setPickerLoc]=useState(null);
   const [modal,setModal]=useState(null);
   const [saveStatus,setSaveStatus]=useState('idle');
-  const [showChangePw,setShowChangePw]=useState(false);
-  const [pwSuccess,setPwSuccess]=useState(false);
   const [showDeleteAccount,setShowDeleteAccount]=useState(false); // boolean — controls delete account modal visibility
-  const [recoveryMode,setRecoveryMode]=useState(false); // true when user arrives via password reset email link
+  const [conflict,setConflict]=useState(false); // another device saved newer data
+  const version=useRef(0);
   const [applyWarning,setApplyWarning]=useState(null); // conflicts from template apply, or null
   const loaded=useRef(false);
   const saveTimer=useRef(null);
   const lastSaved=useRef(null); // JSON snapshot of last successfully saved data
 
   useEffect(()=>{
-    // Supabase v2: onAuthStateChange fires INITIAL_SESSION immediately — no need for getSession()
-    const{data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
-      setUser(session?.user??null);
-      if(event==='INITIAL_SESSION') setAuthLoading(false);
-      if(event==='PASSWORD_RECOVERY'){
-        setRecoveryMode(true);
-        // Clean the token hash from the URL so a refresh doesn't re-trigger recovery
-        window.history.replaceState(null,'',window.location.pathname+window.location.search);
-      }
-    });
-    return()=>subscription.unsubscribe();
+    // Restore a saved session, if any
+    if(!getToken()){setAuthLoading(false);return;}
+    api('GET','/me').then(u=>setUser(toUser(u)))
+      .catch(e=>{if(e.status===401)setToken(null);})
+      .finally(()=>setAuthLoading(false));
   },[]);
 
-  useEffect(()=>{
-    if(!user){setTrips([]);setTemplates([]);setRowId(null);loaded.current=false;lastSaved.current=null;setDataLoading(false);return;}
-    setDataLoading(true);setLoadError(false);
-    sb.from('packr_trips').select('id,data').eq('user_id',user.id).limit(1)
-      .then(({data:rows,error})=>{
-        if(error){console.error('Load failed:',error);setDataLoading(false);setLoadError(true);return;}
-        if(rows&&rows.length>0){
-          setRowId(rows[0].id);
-          const trips=rows[0].data?.trips||[];
-          const templates=rows[0].data?.templates||[];
-          setTrips(trips);
-          setTemplates(templates);
-          // Snapshot what we just loaded so the save effect skips this initial state
-          lastSaved.current=JSON.stringify({trips,templates});
-        }
+  const loadData=()=>{
+    setDataLoading(true);setLoadError(false);setConflict(false);
+    api('GET','/data')
+      .then(({data,version:v})=>{
+        const trips=data?.trips||[];
+        const templates=data?.templates||[];
+        version.current=v;
+        setTrips(trips);
+        setTemplates(templates);
+        // Snapshot what we just loaded so the save effect skips this initial state
+        lastSaved.current=JSON.stringify({trips,templates});
         setDataLoading(false);
         loaded.current=true;
+      })
+      .catch(e=>{
+        console.error('Load failed:',e);
+        if(e.status===401){setToken(null);setUser(null);}
+        setDataLoading(false);setLoadError(true);
       });
+  };
+
+  useEffect(()=>{
+    if(!user){setTrips([]);setTemplates([]);loaded.current=false;lastSaved.current=null;version.current=0;setDataLoading(false);return;}
+    loadData();
   },[user]);
+
+  // ── saving ──────────────────────────────────────────────────────
+  // Edits are saved 3 s after the last change. A failed save (no connection, server error) is retried a few times with
+  // growing waits, then left as "Not saved" until the browser is back online or you edit again. The page also saves as
+  // soon as it is hidden or closed, so the last edit is not lost. Only network errors and 5xx are retried; 409, 401 and
+  // other 4xx answers will not change by trying again.
+  const latest=useRef({trips:[],templates:[]});
+  latest.current={trips,templates};
+  const saving=useRef(false);
+  const retryTimer=useRef(null);
+  const retryCount=useRef(0);
+  const RETRY_WAITS=[5000,15000,60000];
+
+  const saveNow=async(keepalive)=>{
+    if(!loaded.current||!user||saving.current)return;
+    const snapshot=JSON.stringify(latest.current);
+    if(snapshot===lastSaved.current)return;
+    if(saveTimer.current){clearTimeout(saveTimer.current);saveTimer.current=null;}
+    if(retryTimer.current){clearTimeout(retryTimer.current);retryTimer.current=null;}
+    saving.current=true;
+    setSaveStatus('saving');
+    try{
+      const r=await api('PUT','/data',{data:latest.current,baseVersion:version.current},keepalive?{keepalive:true}:undefined);
+      version.current=r.version;
+      lastSaved.current=snapshot;
+      retryCount.current=0;
+      saving.current=false;
+      setSaveStatus('saved');
+      setTimeout(()=>setSaveStatus(s=>s==='saved'?'idle':s),2000);
+      // edited while this save was in flight: save again
+      if(JSON.stringify(latest.current)!==lastSaved.current){
+        saveTimer.current=setTimeout(()=>saveNow(false),3000);
+      }
+    }catch(e){
+      console.error('Save failed:',e);
+      saving.current=false;
+      if(e.status===409){loaded.current=false;setConflict(true);setSaveStatus('idle');return;}
+      if(e.status===401){setToken(null);setUser(null);return;}
+      const retryable=!e.status||e.status>=500;   // no status = the request never got an answer
+      if(retryable&&retryCount.current<RETRY_WAITS.length){
+        setSaveStatus('unsaved');
+        retryTimer.current=setTimeout(()=>saveNow(false),RETRY_WAITS[retryCount.current++]);
+      }else{
+        setSaveStatus(retryable?'unsaved':'error');
+        if(!retryable)setTimeout(()=>setSaveStatus(s=>s==='error'?'idle':s),4000);
+      }
+    }
+  };
 
   useEffect(()=>{
     if(!loaded.current||!user)return;
     // Skip if nothing actually changed since last save
-    const snapshot=JSON.stringify({trips,templates});
-    if(snapshot===lastSaved.current)return;
+    if(JSON.stringify({trips,templates})===lastSaved.current)return;
+    // A new edit restarts the cycle: cancel any pending save or retry and wait 3 s after this change.
     if(saveTimer.current)clearTimeout(saveTimer.current);
-    saveTimer.current=setTimeout(async()=>{
-      setSaveStatus('saving');
-      try{
-        const payload={user_id:user.id,data:{trips,templates},updated_at:new Date().toISOString()};
-        if(rowId){
-          const{error}=await sb.from('packr_trips').update(payload).eq('id',rowId);
-          if(error)throw error;
-        }else{
-          const{data:row,error}=await sb.from('packr_trips').insert(payload).select('id').single();
-          if(error)throw error;
-          if(row)setRowId(row.id);
-        }
-        lastSaved.current=snapshot;
-        setSaveStatus('saved');
-        setTimeout(()=>setSaveStatus('idle'),2000);
-      }catch(e){
-        console.error('Save failed:',e);
-        setSaveStatus('error');
-        setTimeout(()=>setSaveStatus('idle'),4000);
-      }
-    },3000); // 3s debounce — imperceptible for packing, halves write frequency vs 1.5s
-  },[trips,templates,rowId,user]);
+    if(retryTimer.current){clearTimeout(retryTimer.current);retryTimer.current=null;}
+    retryCount.current=0;
+    saveTimer.current=setTimeout(()=>saveNow(false),3000); // 3s debounce — imperceptible for packing, halves write frequency vs 1.5s
+  },[trips,templates,user]);
+
+  useEffect(()=>{
+    // Page hidden or closed: save now instead of waiting for the timer. keepalive lets the request finish after the page is gone.
+    const onHide=()=>{if(document.visibilityState==='hidden')saveNow(true);};
+    // Connection is back: if something is waiting to be saved, try again from the start.
+    const onOnline=()=>{retryCount.current=0;saveNow(false);};
+    const onPageHide=()=>saveNow(true);
+    document.addEventListener('visibilitychange',onHide);
+    window.addEventListener('pagehide',onPageHide);
+    window.addEventListener('online',onOnline);
+    return()=>{document.removeEventListener('visibilitychange',onHide);window.removeEventListener('pagehide',onPageHide);window.removeEventListener('online',onOnline);};
+  },[user]);
 
   const signOut=()=>{
-    sb.auth.signOut();
+    api('POST','/auth/logout').catch(()=>{});setToken(null);setUser(null);
     setScreen('home');setActiveId(null);setDrawerItem(null);setPickerLoc(null);
     loaded.current=false;lastSaved.current=null;
   };
@@ -3438,17 +3346,24 @@ function App(){
   const pickerLocObj=trip?.locations.find(l=>l.id===pickerLoc);
 
   if(authLoading)return <LoadingScreen/>;
-  if(recoveryMode)return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)'}}>
-    <RecoveryScreen onDone={()=>setRecoveryMode(false)}/>
-  </div>;
-  if(!user)return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)'}}><AuthScreen/></div>;
+  if(!user)return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)'}}><AuthScreen onSignedIn={u=>setUser(u)}/></div>;
   if(dataLoading)return <LoadingScreen message="Loading your trips…"/>;
+  if(conflict)return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)',
+    alignItems:'center',justifyContent:'center',gap:16,padding:40}}>
+    <div style={{fontSize:32}}>⚠</div>
+    <div style={{fontSize:16,fontWeight:600,color:'var(--tx)'}}>Your trips changed on another device</div>
+    <div style={{fontSize:13,color:'var(--tx3)',textAlign:'center',maxWidth:320}}>Your latest edit was not saved, so nothing was overwritten. Reload to get the newest version.</div>
+    <button onClick={loadData}
+      style={{padding:'10px 24px',borderRadius:8,background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:14}}>
+      Reload latest
+    </button>
+  </div>;
   if(loadError)return <div style={{display:'flex',flexDirection:'column',height:'100%',background:'var(--bg)',
     alignItems:'center',justifyContent:'center',gap:16,padding:40}}>
     <div style={{fontSize:32}}>⚠</div>
     <div style={{fontSize:16,fontWeight:600,color:'var(--tx)'}}>Couldn't load your data</div>
     <div style={{fontSize:13,color:'var(--tx3)',textAlign:'center'}}>Check your internet connection and try again.</div>
-    <button onClick={()=>{setLoadError(false);setDataLoading(true);sb.from('packr_trips').select('id,data').eq('user_id',user.id).limit(1).then(({data:rows,error})=>{if(error){setDataLoading(false);setLoadError(true);return;}if(rows&&rows.length>0){setRowId(rows[0].id);const t=rows[0].data?.trips||[];const tm=rows[0].data?.templates||[];setTrips(t);setTemplates(tm);lastSaved.current=JSON.stringify({trips:t,templates:tm});}setDataLoading(false);loaded.current=true;});}}
+    <button onClick={loadData}
       style={{padding:'10px 24px',borderRadius:8,background:'var(--am)',color:'#1a0e00',fontWeight:700,fontSize:14}}>
       Try Again
     </button>
@@ -3464,15 +3379,9 @@ function App(){
         <div style={{flex:1,minWidth:0}}/>
         <SaveIndicator status={saveStatus}/>
         <UserMenu user={user} onUpdate={u=>setUser(u)}
-          onChangePw={()=>setShowChangePw(true)}
           onSignOut={signOut}
-          onDeleteAccount={()=>setShowDeleteAccount(true)}
-          pwSuccess={pwSuccess}/>
+          onDeleteAccount={()=>setShowDeleteAccount(true)}/>
       </div>
-      {showChangePw&&<ChangePasswordModal onClose={result=>{
-        setShowChangePw(false);
-        if(result==='success'){setPwSuccess(true);setTimeout(()=>setPwSuccess(false),3000);}
-      }}/>}
       {showDeleteAccount&&<DeleteAccountModal
         onClose={()=>setShowDeleteAccount(false)}
         onDeleted={signOut}/>}
@@ -3500,9 +3409,8 @@ function App(){
     {screen==='trip'&&trip&&<>
       <TripHeader trip={trip} onHome={goHome}
         onRename={name=>renameTrip(activeId,name)}
-        onSignOut={signOut} onChangePw={()=>setShowChangePw(true)}
+        onSignOut={signOut}
         onDeleteAccount={()=>setShowDeleteAccount(true)}
-        pwSuccess={pwSuccess}
         user={user} onUpdateUser={u=>setUser(u)}
         onSaveTemplate={()=>setModal({type:'save-template'})}
         onApplyTemplate={()=>setModal({type:'apply-template'})}
@@ -3590,10 +3498,6 @@ function App(){
       })()}
       {modal?.type==='save-template'&&trip&&
         <SaveTemplateModal trip={trip} onClose={()=>setModal(null)} onSave={saveTemplate}/>}
-      {showChangePw&&<ChangePasswordModal onClose={result=>{
-        setShowChangePw(false);
-        if(result==='success'){setPwSuccess(true);setTimeout(()=>setPwSuccess(false),3000);}
-      }}/>}
       {showDeleteAccount&&<DeleteAccountModal
         onClose={()=>setShowDeleteAccount(false)}
         onDeleted={signOut}/>}
