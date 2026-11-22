@@ -1732,7 +1732,9 @@ function DeleteAccountModal({onClose,onDeleted}){
       await api('DELETE','/me');
       onDeleted();
     }catch(e){
-      setErr(e.message||'Something went wrong. Please try again.');
+      // 401: the session is already gone (for example the account was deleted but the reply was lost), so there is nothing to retry: sign out.
+      if(e.status===401){onDeleted();return;}
+      setErr("Couldn't delete. Check your connection and try again.");
       setLoading(false);
     }
   };
