@@ -1,0 +1,10 @@
+node_modules/
+.wrangler/
+import/
+.dev.vars
+dist/
+# Database backups and exports hold real data: never commit them
+/*.sql
+*backup*.sql
+*.csv
+!tests/fixtures/*.csv
